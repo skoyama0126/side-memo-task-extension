@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Side Memo</title>
+    <link rel="stylesheet" href="sidepanel.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <nav class="tabs" aria-label="機能タブ">
+        <button class="tab-button is-active" data-tab="memo" type="button">メモ</button>
+        <button class="tab-button" data-tab="snippets" type="button">定型文</button>
+        <button class="tab-button" data-tab="tasks" type="button">TODO</button>
+        <button class="tab-button" data-tab="web" type="button">Web</button>
+      </nav>
+
+      <main>
+        <section class="panel is-active panel--memo" data-panel="memo">
+          <div class="memo-toolbar">
+            <div id="memo-slot-list" class="memo-slot-list" aria-label="メモ一覧"></div>
+            <div class="memo-toolbar__actions">
+              <button id="memo-add" class="memo-tool-button memo-tool-button--add" type="button" aria-label="メモ枠を追加">
+                +
+              </button>
+              <button id="memo-remove" class="memo-tool-button memo-tool-button--remove" type="button" aria-label="選択中のメモ枠を削除">
+                -
+              </button>
+            </div>
+          </div>
+
+          <label class="sr-only" for="memo-input">メモ本文</label>
+          <textarea
+            id="memo-input"
+            class="memo-input memo-input--grid"
+            placeholder="選択中のメモを入力"
+          ></textarea>
+        </section>
+
+        <section class="panel" data-panel="snippets">
+          <div class="panel-header">
+            <button id="snippet-open-modal" class="primary-button" type="button">追加</button>
+          </div>
+          <div id="snippet-list" class="stack-list"></div>
+        </section>
+
+        <section class="panel" data-panel="tasks">
+          <form id="task-form" class="inline-form">
+            <input id="task-input" type="text" maxlength="120" placeholder="新しいタスクを追加" required />
+            <button class="primary-button" type="submit">追加</button>
+          </form>
+
+          <div class="filter-group" role="tablist" aria-label="TODOフィルター">
+            <button class="filter-button is-active" data-filter="all" type="button">すべて</button>
+            <button class="filter-button" data-filter="open" type="button">未完了</button>
+            <button class="filter-button" data-filter="done" type="button">完了</button>
+          </div>
+
+          <div id="task-list" class="stack-list"></div>
+        </section>
+
+        <section class="panel" data-panel="web">
+          <div class="panel-header">
+            <button id="web-open-modal" class="primary-button" type="button">追加</button>
+          </div>
+          <div id="web-list" class="stack-list"></div>
+        </section>
+      </main>
+    </div>
+
+    <template id="snippet-item-template">
+      <article class="item-card">
+        <div class="item-card__header">
+          <button class="snippet-title-button" data-action="copy" type="button"></button>
+          <div class="item-card__inline-actions">
+            <button class="icon-letter-button" data-action="copy" type="button" aria-label="コピー">写</button>
+            <button class="icon-letter-button" data-action="edit" type="button" aria-label="編集">編</button>
+            <button class="icon-letter-button icon-letter-button--danger" data-action="delete" type="button" aria-label="削除">×</button>
+          </div>
+        </div>
+        <div class="item-card__body">
+          <p></p>
+        </div>
+      </article>
+    </template>
+
+    <template id="task-item-template">
+      <article class="task-row">
+        <label class="task-row__toggle">
+          <input type="checkbox" />
+          <span></span>
+        </label>
+        <button class="danger-icon-button" data-action="delete" type="button" aria-label="タスクを削除">
+          ×
+        </button>
+      </article>
+    </template>
+
+    <template id="web-item-template">
+      <article class="item-card">
+        <div class="item-card__header">
+          <button class="snippet-title-button" data-action="open" type="button"></button>
+          <div class="item-card__inline-actions">
+            <button class="icon-letter-button" data-action="open" type="button" aria-label="開く">開</button>
+            <button class="icon-letter-button" data-action="edit" type="button" aria-label="編集">編</button>
+            <button class="icon-letter-button icon-letter-button--danger" data-action="delete" type="button" aria-label="削除">×</button>
+          </div>
+        </div>
+        <div class="item-card__body">
+          <p></p>
+        </div>
+      </article>
+    </template>
+
+    <div id="snippet-modal" class="modal" hidden>
+      <div class="modal__backdrop" data-action="close-modal"></div>
+      <div class="modal__dialog" role="dialog" aria-modal="true" aria-labelledby="snippet-modal-title">
+        <div class="modal__header">
+          <h3 id="snippet-modal-title">定型文を登録</h3>
+          <button id="snippet-modal-close" class="icon-letter-button" type="button" aria-label="閉じる">×</button>
+        </div>
+        <form id="snippet-form" class="card-form card-form--modal">
+          <input type="hidden" id="snippet-edit-id" />
+          <label>
+            <span>タイトル</span>
+            <input id="snippet-title" type="text" maxlength="60" placeholder="例: 問い合わせ返信" required />
+          </label>
+          <label>
+            <span>本文</span>
+            <textarea id="snippet-body" rows="6" maxlength="2000" placeholder="コピーしたい定型文を入力" required></textarea>
+          </label>
+          <div class="form-actions">
+            <button class="primary-button" type="submit">保存</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div id="web-modal" class="modal" hidden>
+      <div class="modal__backdrop" data-action="close-web-modal"></div>
+      <div class="modal__dialog" role="dialog" aria-modal="true" aria-labelledby="web-modal-title">
+        <div class="modal__header">
+          <h3 id="web-modal-title">Webを登録</h3>
+          <button id="web-modal-close" class="icon-letter-button" type="button" aria-label="閉じる">×</button>
+        </div>
+        <form id="web-form" class="card-form card-form--modal">
+          <input type="hidden" id="web-edit-id" />
+          <label>
+            <span>タイトル</span>
+            <input id="web-title" type="text" maxlength="60" placeholder="例: ChatGPT" required />
+          </label>
+          <label>
+            <span>URL</span>
+            <input id="web-url" type="url" maxlength="2000" placeholder="https://example.com" required />
+          </label>
+          <div class="form-actions">
+            <button class="primary-button" type="submit">保存</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <script src="sidepanel.js"></script>
+  </body>
+</html>
