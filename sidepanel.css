@@ -42,6 +42,37 @@ button {
 .app-shell {
   min-height: 100vh;
   padding: 14px;
+  padding-bottom: 52px;
+}
+
+.utility-bar,
+.tabs {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.utility-bar {
+  position: fixed;
+  right: 14px;
+  bottom: 14px;
+  z-index: 10;
+  margin-bottom: 0;
+  justify-content: flex-end;
+}
+
+.utility-actions {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-left: 0;
+  padding: 6px 14px;
+  border: 1px solid rgba(201, 201, 201, 0.9);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+  backdrop-filter: blur(6px);
 }
 
 .tabs {
@@ -106,17 +137,6 @@ button {
   margin: 4px 0 0;
   color: var(--muted);
   font-size: 12px;
-}
-
-.status-pill {
-  flex-shrink: 0;
-  padding: 6px 10px;
-  border: 1px solid #c7ddc7;
-  border-radius: 999px;
-  background: #eef8ee;
-  color: #3c7d3c;
-  font-size: 12px;
-  font-weight: 600;
 }
 
 .panel--memo .panel-header {
@@ -243,6 +263,7 @@ button {
 
 .primary-button,
 .secondary-button,
+.utility-link-button,
 .ghost-button,
 .danger-button,
 .danger-icon-button {
@@ -263,6 +284,24 @@ button {
 .ghost-button {
   background: linear-gradient(180deg, #ffffff, #ececec);
   color: #444444;
+}
+
+.utility-link-button {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--primary);
+  padding: 2px 0;
+  font-size: 13px;
+  line-height: 1.2;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  white-space: nowrap;
+}
+
+.utility-link-button:hover {
+  color: #2f66bf;
 }
 
 .danger-button,
@@ -338,6 +377,10 @@ button {
 .filter-group {
   justify-content: flex-start;
   margin-bottom: 14px;
+}
+
+.section-meta {
+  margin-bottom: 12px;
 }
 
 .task-row {

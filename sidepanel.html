@@ -8,6 +8,14 @@
   </head>
   <body>
     <div class="app-shell">
+      <div class="utility-bar">
+        <div class="utility-actions">
+          <button id="backup-export" class="utility-link-button" type="button">バックアップ作成</button>
+          <button id="backup-import" class="utility-link-button" type="button">復元</button>
+          <input id="backup-file-input" type="file" accept="application/json,.json" hidden />
+        </div>
+      </div>
+
       <nav class="tabs" aria-label="機能タブ">
         <button class="tab-button is-active" data-tab="memo" type="button">メモ</button>
         <button class="tab-button" data-tab="snippets" type="button">定型文</button>
@@ -50,6 +58,10 @@
             <button class="primary-button" type="submit">追加</button>
           </form>
 
+          <div class="section-meta">
+            <span id="task-summary">0 / 0 完了</span>
+          </div>
+
           <div class="filter-group" role="tablist" aria-label="TODOフィルター">
             <button class="filter-button is-active" data-filter="all" type="button">すべて</button>
             <button class="filter-button" data-filter="open" type="button">未完了</button>
@@ -73,7 +85,6 @@
         <div class="item-card__header">
           <button class="snippet-title-button" data-action="copy" type="button"></button>
           <div class="item-card__inline-actions">
-            <button class="icon-letter-button" data-action="copy" type="button" aria-label="コピー">写</button>
             <button class="icon-letter-button" data-action="edit" type="button" aria-label="編集">編</button>
             <button class="icon-letter-button icon-letter-button--danger" data-action="delete" type="button" aria-label="削除">×</button>
           </div>

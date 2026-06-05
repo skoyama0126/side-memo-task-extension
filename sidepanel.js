@@ -1,5 +1,6 @@
 const STORAGE_KEY = "sideMemoDeskState";
 const MAX_MEMO_SLOTS = 30;
+const BACKUP_VERSION = 1;
 const defaultState = {
   memos: [{ id: createId(), content: "" }],
   selectedMemoId: null,
@@ -21,7 +22,9 @@ const elements = {
   memoAdd: document.querySelector("#memo-add"),
   memoRemove: document.querySelector("#memo-remove"),
   memoInput: document.querySelector("#memo-input"),
-  memoStatus: document.querySelector("#memo-status"),
+  backupExport: document.querySelector("#backup-export"),
+  backupImport: document.querySelector("#backup-import"),
+  backupFileInput: document.querySelector("#backup-file-input"),
   snippetModal: document.querySelector("#snippet-modal"),
   snippetOpenModal: document.querySelector("#snippet-open-modal"),
   snippetModalClose: document.querySelector("#snippet-modal-close"),
@@ -64,6 +67,9 @@ function bindEvents() {
   elements.memoInput.addEventListener("input", handleMemoInput);
   elements.memoAdd.addEventListener("click", handleMemoAdd);
   elements.memoRemove.addEventListener("click", handleMemoRemove);
+  elements.backupExport.addEventListener("click", handleBackupExport);
+  elements.backupImport.addEventListener("click", () => elements.backupFileInput.click());
+  elements.backupFileInput.addEventListener("change", handleBackupImport);
 
   elements.snippetOpenModal.addEventListener("click", () => openSnippetModal());
   elements.snippetModalClose.addEventListener("click", closeSnippetModal);
@@ -141,15 +147,9 @@ function normalizeState(savedState) {
 
 async function persistState(statusText) {
   await chrome.storage.local.set({ [STORAGE_KEY]: state.data });
-  if (statusText && elements.memoStatus) {
-    elements.memoStatus.textContent = statusText;
-  }
 }
 
 function renderAll() {
-  if (elements.memoStatus) {
-    elements.memoStatus.textContent = "保存済み";
-  }
   renderMemoSlots();
   renderSnippets();
   renderWebLinks();
@@ -201,27 +201,22 @@ function handleMemoInput(event) {
   }
 
   selectedMemo.content = event.target.value;
-  if (elements.memoStatus) {
-    elements.memoStatus.textContent = "保存中...";
-  }
   clearTimeout(state.memoSaveTimer);
   state.memoSaveTimer = setTimeout(async () => {
-    await persistState("保存済み");
+    state.memoSaveTimer = null;
+    await persistState();
   }, 250);
 }
 
 async function handleMemoAdd() {
   if (state.data.memos.length >= MAX_MEMO_SLOTS) {
-    if (elements.memoStatus) {
-      elements.memoStatus.textContent = `メモは最大${MAX_MEMO_SLOTS}件です`;
-    }
     return;
   }
 
   const newMemo = { id: createId(), content: "" };
   state.data.memos.push(newMemo);
   state.data.selectedMemoId = newMemo.id;
-  await persistState("保存済み");
+  await persistState();
   renderMemoSlots();
   elements.memoInput.focus();
 }
@@ -235,7 +230,7 @@ async function handleMemoRemove() {
   state.data.memos = state.data.memos.filter((memo) => memo.id !== state.data.selectedMemoId);
   const nextIndex = Math.max(0, currentIndex - 1);
   state.data.selectedMemoId = state.data.memos[nextIndex].id;
-  await persistState("保存済み");
+  await persistState();
   renderMemoSlots();
 }
 
@@ -514,6 +509,77 @@ function normalizeUrl(value) {
 
 function openWebLink(url) {
   window.open(url, "_blank", "noopener,noreferrer");
+}
+
+async function flushPendingMemoSave() {
+  if (!state.memoSaveTimer) {
+    return;
+  }
+
+  clearTimeout(state.memoSaveTimer);
+  state.memoSaveTimer = null;
+  await persistState();
+}
+
+async function handleBackupExport() {
+  await flushPendingMemoSave();
+
+  const backup = {
+    app: "side-memo-task-extension",
+    version: BACKUP_VERSION,
+    exportedAt: new Date().toISOString(),
+    data: state.data
+  };
+  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = createBackupFilename();
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+async function handleBackupImport(event) {
+  const [file] = event.target.files || [];
+  event.target.value = "";
+
+  if (!file) {
+    return;
+  }
+
+  const shouldRestore = window.confirm("現在のデータを上書きして復元します。よろしいですか？");
+  if (!shouldRestore) {
+    return;
+  }
+
+  try {
+    const text = await file.text();
+    const parsed = JSON.parse(text);
+    const backupData = extractBackupData(parsed);
+    state.data = normalizeState(backupData);
+    await persistState();
+    renderAll();
+  } catch (error) {
+    console.error("Failed to import backup", error);
+    window.alert("バックアップの読み込みに失敗しました。JSONファイルを確認してください。");
+  }
+}
+
+function extractBackupData(parsed) {
+  if (!parsed || typeof parsed !== "object") {
+    throw new Error("Invalid backup payload");
+  }
+
+  if ("data" in parsed && parsed.data && typeof parsed.data === "object") {
+    return parsed.data;
+  }
+
+  return parsed;
+}
+
+function createBackupFilename() {
+  const iso = new Date().toISOString().replace(/[:.]/g, "-");
+  return `side-memo-backup-${iso}.json`;
 }
 
 function createId() {
