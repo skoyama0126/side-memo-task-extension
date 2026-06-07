@@ -116,6 +116,7 @@ button {
 }
 
 .panel-header {
+  justify-content: flex-end;
   margin-bottom: 12px;
 }
 
@@ -247,6 +248,14 @@ button {
   margin-bottom: 14px;
 }
 
+.inline-form .memo-tool-button {
+  height: auto;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .primary-button,
 .secondary-button,
 .utility-link-button,
@@ -328,7 +337,7 @@ button {
   background: transparent;
   color: var(--text);
   padding: 0;
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 700;
   text-align: left;
   text-overflow: ellipsis;
