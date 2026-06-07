@@ -82,8 +82,7 @@ button {
   margin-bottom: 14px;
 }
 
-.tab-button,
-.filter-button {
+.tab-button {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: linear-gradient(180deg, #ffffff, #e8e8e8);
@@ -92,8 +91,7 @@ button {
   padding: 10px 12px;
 }
 
-.tab-button.is-active,
-.filter-button.is-active {
+.tab-button.is-active {
   border-color: var(--primary);
   background: linear-gradient(180deg, #5b92eb, #3f78d6);
   color: #ffffff;
@@ -110,9 +108,7 @@ button {
 }
 
 .panel-header,
-.section-meta,
-.form-actions,
-.filter-group {
+.form-actions {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -123,24 +119,15 @@ button {
   margin-bottom: 12px;
 }
 
-.panel-header--compact {
-  margin-bottom: 10px;
-}
-
 .panel-header h2 {
   margin: 0;
   font-size: 18px;
 }
 
-.panel-header p,
-.section-meta {
+.panel-header p {
   margin: 4px 0 0;
   color: var(--muted);
   font-size: 12px;
-}
-
-.panel--memo .panel-header {
-  margin-bottom: 10px;
 }
 
 .memo-toolbar {
@@ -245,8 +232,7 @@ button {
 }
 
 .card-form label,
-.item-card__body,
-.task-row__toggle {
+.item-card__body {
   display: grid;
   gap: 8px;
 }
@@ -322,9 +308,6 @@ button {
 
 .item-card__body p {
   margin: 0;
-}
-
-.item-card__body p {
   color: var(--muted);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -357,6 +340,13 @@ button {
   gap: 8px;
 }
 
+.task-row__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
 .icon-letter-button {
   width: 28px;
   height: 28px;
@@ -375,13 +365,10 @@ button {
   background: linear-gradient(180deg, #fff7f7, #f1dddd);
 }
 
-.filter-group {
-  justify-content: flex-start;
-  margin-bottom: 14px;
-}
-
-.section-meta {
-  margin-bottom: 12px;
+.icon-letter-button:disabled,
+.danger-icon-button:disabled {
+  cursor: default;
+  opacity: 0.45;
 }
 
 .task-row {
@@ -389,19 +376,12 @@ button {
   align-items: center;
 }
 
-.task-row__toggle {
-  grid-template-columns: auto 1fr;
-  align-items: center;
-  gap: 12px;
-}
-
-.task-row__toggle span {
+.task-row__label {
+  min-width: 0;
   line-height: 1.5;
-}
-
-.task-row.is-done span {
-  color: var(--muted);
-  text-decoration: line-through;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: normal;
 }
 
 .danger-icon-button {

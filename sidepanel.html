@@ -10,13 +10,13 @@
     <div class="app-shell">
       <div class="utility-bar">
         <div class="utility-actions">
-          <button id="backup-export" class="utility-link-button" type="button">バックアップ作成</button>
+          <button id="backup-export" class="utility-link-button" type="button">バックアップ書き出し</button>
           <button id="backup-import" class="utility-link-button" type="button">復元</button>
           <input id="backup-file-input" type="file" accept="application/json,.json" hidden />
         </div>
       </div>
 
-      <nav class="tabs" aria-label="機能タブ">
+      <nav class="tabs" aria-label="メインタブ">
         <button class="tab-button is-active" data-tab="memo" type="button">メモ</button>
         <button class="tab-button" data-tab="snippets" type="button">定型文</button>
         <button class="tab-button" data-tab="tasks" type="button">TODO</button>
@@ -28,10 +28,15 @@
           <div class="memo-toolbar">
             <div id="memo-slot-list" class="memo-slot-list" aria-label="メモ一覧"></div>
             <div class="memo-toolbar__actions">
-              <button id="memo-add" class="memo-tool-button memo-tool-button--add" type="button" aria-label="メモ枠を追加">
+              <button id="memo-add" class="memo-tool-button memo-tool-button--add" type="button" aria-label="メモを追加">
                 +
               </button>
-              <button id="memo-remove" class="memo-tool-button memo-tool-button--remove" type="button" aria-label="選択中のメモ枠を削除">
+              <button
+                id="memo-remove"
+                class="memo-tool-button memo-tool-button--remove"
+                type="button"
+                aria-label="選択中のメモを削除"
+              >
                 -
               </button>
             </div>
@@ -41,7 +46,7 @@
           <textarea
             id="memo-input"
             class="memo-input memo-input--grid"
-            placeholder="選択中のメモを入力"
+            placeholder="選択中のメモを書いてください"
           ></textarea>
         </section>
 
@@ -57,16 +62,6 @@
             <input id="task-input" type="text" maxlength="120" placeholder="新しいタスクを追加" required />
             <button class="primary-button" type="submit">追加</button>
           </form>
-
-          <div class="section-meta">
-            <span id="task-summary">0 / 0 完了</span>
-          </div>
-
-          <div class="filter-group" role="tablist" aria-label="TODOフィルター">
-            <button class="filter-button is-active" data-filter="all" type="button">すべて</button>
-            <button class="filter-button" data-filter="open" type="button">未完了</button>
-            <button class="filter-button" data-filter="done" type="button">完了</button>
-          </div>
 
           <div id="task-list" class="stack-list"></div>
         </section>
@@ -86,6 +81,8 @@
           <button class="snippet-title-button" data-action="copy" type="button"></button>
           <div class="item-card__inline-actions">
             <button class="icon-letter-button" data-action="edit" type="button" aria-label="編集">編</button>
+            <button class="icon-letter-button" data-action="move-up" type="button" aria-label="上へ移動">↑</button>
+            <button class="icon-letter-button" data-action="move-down" type="button" aria-label="下へ移動">↓</button>
             <button class="icon-letter-button icon-letter-button--danger" data-action="delete" type="button" aria-label="削除">×</button>
           </div>
         </div>
@@ -97,13 +94,12 @@
 
     <template id="task-item-template">
       <article class="task-row">
-        <label class="task-row__toggle">
-          <input type="checkbox" />
-          <span></span>
-        </label>
-        <button class="danger-icon-button" data-action="delete" type="button" aria-label="タスクを削除">
-          ×
-        </button>
+        <span class="task-row__label"></span>
+        <div class="task-row__actions">
+          <button class="icon-letter-button" data-action="move-up" type="button" aria-label="上へ移動">↑</button>
+          <button class="icon-letter-button" data-action="move-down" type="button" aria-label="下へ移動">↓</button>
+          <button class="danger-icon-button" data-action="delete" type="button" aria-label="削除">×</button>
+        </div>
       </article>
     </template>
 
@@ -113,6 +109,8 @@
           <button class="snippet-title-button" data-action="open" type="button"></button>
           <div class="item-card__inline-actions">
             <button class="icon-letter-button" data-action="edit" type="button" aria-label="編集">編</button>
+            <button class="icon-letter-button" data-action="move-up" type="button" aria-label="上へ移動">↑</button>
+            <button class="icon-letter-button" data-action="move-down" type="button" aria-label="下へ移動">↓</button>
             <button class="icon-letter-button icon-letter-button--danger" data-action="delete" type="button" aria-label="削除">×</button>
           </div>
         </div>
@@ -126,14 +124,14 @@
       <div class="modal__backdrop" data-action="close-modal"></div>
       <div class="modal__dialog" role="dialog" aria-modal="true" aria-labelledby="snippet-modal-title">
         <div class="modal__header">
-          <h3 id="snippet-modal-title">定型文を登録</h3>
+          <h3 id="snippet-modal-title">定型文を追加</h3>
           <button id="snippet-modal-close" class="icon-letter-button" type="button" aria-label="閉じる">×</button>
         </div>
         <form id="snippet-form" class="card-form card-form--modal">
           <input type="hidden" id="snippet-edit-id" />
           <label>
             <span>タイトル</span>
-            <input id="snippet-title" type="text" maxlength="60" placeholder="例: 問い合わせ返信" required />
+            <input id="snippet-title" type="text" maxlength="60" placeholder="例: LP制作プロンプト" required />
           </label>
           <label>
             <span>本文</span>
@@ -150,7 +148,7 @@
       <div class="modal__backdrop" data-action="close-web-modal"></div>
       <div class="modal__dialog" role="dialog" aria-modal="true" aria-labelledby="web-modal-title">
         <div class="modal__header">
-          <h3 id="web-modal-title">Webを登録</h3>
+          <h3 id="web-modal-title">Webを追加</h3>
           <button id="web-modal-close" class="icon-letter-button" type="button" aria-label="閉じる">×</button>
         </div>
         <form id="web-form" class="card-form card-form--modal">

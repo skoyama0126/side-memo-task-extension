@@ -1,6 +1,7 @@
 const STORAGE_KEY = "sideMemoDeskState";
 const MAX_MEMO_SLOTS = 30;
 const BACKUP_VERSION = 1;
+
 const defaultState = {
   memos: [{ id: createId(), content: "" }],
   selectedMemoId: null,
@@ -11,7 +12,6 @@ const defaultState = {
 
 const state = {
   data: structuredClone(defaultState),
-  taskFilter: "all",
   memoSaveTimer: null
 };
 
@@ -46,8 +46,6 @@ const elements = {
   taskForm: document.querySelector("#task-form"),
   taskInput: document.querySelector("#task-input"),
   taskList: document.querySelector("#task-list"),
-  taskSummary: document.querySelector("#task-summary"),
-  taskFilters: [...document.querySelectorAll(".filter-button")],
   taskTemplate: document.querySelector("#task-item-template")
 };
 
@@ -90,13 +88,6 @@ function bindEvents() {
   elements.webForm.addEventListener("submit", handleWebSubmit);
 
   elements.taskForm.addEventListener("submit", handleTaskSubmit);
-  elements.taskFilters.forEach((button) => {
-    button.addEventListener("click", () => {
-      state.taskFilter = button.dataset.filter;
-      renderTaskFilter();
-      renderTasks();
-    });
-  });
 }
 
 async function loadState() {
@@ -138,6 +129,14 @@ function normalizeState(savedState) {
     normalized.tasks = [];
   }
 
+  normalized.tasks = normalized.tasks
+    .filter((task) => task && typeof task.title === "string")
+    .map((task) => ({
+      id: task.id || createId(),
+      title: task.title,
+      createdAt: task.createdAt || Date.now()
+    }));
+
   if (!Array.isArray(normalized.webLinks)) {
     normalized.webLinks = [];
   }
@@ -145,16 +144,15 @@ function normalizeState(savedState) {
   return normalized;
 }
 
-async function persistState(statusText) {
+async function persistState() {
   await chrome.storage.local.set({ [STORAGE_KEY]: state.data });
 }
 
 function renderAll() {
   renderMemoSlots();
   renderSnippets();
-  renderWebLinks();
-  renderTaskFilter();
   renderTasks();
+  renderWebLinks();
 }
 
 function switchTab(tabName) {
@@ -275,22 +273,23 @@ function renderSnippets() {
     return;
   }
 
-  state.data.snippets.forEach((snippet) => {
+  state.data.snippets.forEach((snippet, index) => {
     const fragment = elements.snippetTemplate.content.cloneNode(true);
     const card = fragment.querySelector(".item-card");
     const titleButton = fragment.querySelector(".snippet-title-button");
     const body = fragment.querySelector("p");
-    const copyButtons = [...fragment.querySelectorAll('[data-action="copy"]')];
     const editButton = fragment.querySelector('[data-action="edit"]');
+    const moveUpButton = fragment.querySelector('[data-action="move-up"]');
+    const moveDownButton = fragment.querySelector('[data-action="move-down"]');
     const deleteButton = fragment.querySelector('[data-action="delete"]');
 
     titleButton.textContent = snippet.title;
     body.textContent = snippet.body;
+    moveUpButton.disabled = index === 0;
+    moveDownButton.disabled = index === state.data.snippets.length - 1;
 
-    copyButtons.forEach((button) => {
-      button.addEventListener("click", async () => {
-        await navigator.clipboard.writeText(snippet.body);
-      });
+    titleButton.addEventListener("click", async () => {
+      await navigator.clipboard.writeText(snippet.body);
     });
 
     editButton.addEventListener("click", () => {
@@ -301,6 +300,16 @@ function renderSnippets() {
       openSnippetModal("定型文を編集");
     });
 
+    moveUpButton.addEventListener("click", async () => {
+      await moveListItem("snippets", index, index - 1);
+      renderSnippets();
+    });
+
+    moveDownButton.addEventListener("click", async () => {
+      await moveListItem("snippets", index, index + 1);
+      renderSnippets();
+    });
+
     deleteButton.addEventListener("click", async () => {
       state.data.snippets = state.data.snippets.filter((item) => item.id !== snippet.id);
       await persistState();
@@ -308,6 +317,64 @@ function renderSnippets() {
     });
 
     elements.snippetList.append(card);
+  });
+}
+
+async function handleTaskSubmit(event) {
+  event.preventDefault();
+  const title = elements.taskInput.value.trim();
+  if (!title) {
+    return;
+  }
+
+  state.data.tasks.unshift({
+    id: createId(),
+    title,
+    createdAt: Date.now()
+  });
+
+  await persistState();
+  elements.taskForm.reset();
+  renderTasks();
+}
+
+function renderTasks() {
+  elements.taskList.innerHTML = "";
+
+  if (state.data.tasks.length === 0) {
+    elements.taskList.append(createEmptyState("まだタスクがありません。"));
+    return;
+  }
+
+  state.data.tasks.forEach((task, index) => {
+    const fragment = elements.taskTemplate.content.cloneNode(true);
+    const card = fragment.querySelector(".task-row");
+    const label = fragment.querySelector(".task-row__label");
+    const moveUpButton = fragment.querySelector('[data-action="move-up"]');
+    const moveDownButton = fragment.querySelector('[data-action="move-down"]');
+    const deleteButton = fragment.querySelector('[data-action="delete"]');
+
+    label.textContent = task.title;
+    moveUpButton.disabled = index === 0;
+    moveDownButton.disabled = index === state.data.tasks.length - 1;
+
+    moveUpButton.addEventListener("click", async () => {
+      await moveListItem("tasks", index, index - 1);
+      renderTasks();
+    });
+
+    moveDownButton.addEventListener("click", async () => {
+      await moveListItem("tasks", index, index + 1);
+      renderTasks();
+    });
+
+    deleteButton.addEventListener("click", async () => {
+      state.data.tasks = state.data.tasks.filter((item) => item.id !== task.id);
+      await persistState();
+      renderTasks();
+    });
+
+    elements.taskList.append(card);
   });
 }
 
@@ -347,22 +414,23 @@ function renderWebLinks() {
     return;
   }
 
-  state.data.webLinks.forEach((item) => {
+  state.data.webLinks.forEach((item, index) => {
     const fragment = elements.webTemplate.content.cloneNode(true);
     const card = fragment.querySelector(".item-card");
     const titleButton = fragment.querySelector(".snippet-title-button");
     const body = fragment.querySelector("p");
-    const openButtons = [...fragment.querySelectorAll('[data-action="open"]')];
     const editButton = fragment.querySelector('[data-action="edit"]');
+    const moveUpButton = fragment.querySelector('[data-action="move-up"]');
+    const moveDownButton = fragment.querySelector('[data-action="move-down"]');
     const deleteButton = fragment.querySelector('[data-action="delete"]');
 
     titleButton.textContent = item.title;
     body.textContent = item.url;
+    moveUpButton.disabled = index === 0;
+    moveDownButton.disabled = index === state.data.webLinks.length - 1;
 
-    openButtons.forEach((button) => {
-      button.addEventListener("click", () => {
-        openWebLink(item.url);
-      });
+    titleButton.addEventListener("click", () => {
+      openWebLink(item.url);
     });
 
     editButton.addEventListener("click", () => {
@@ -371,6 +439,16 @@ function renderWebLinks() {
       elements.webUrl.value = item.url;
       switchTab("web");
       openWebModal("Webを編集");
+    });
+
+    moveUpButton.addEventListener("click", async () => {
+      await moveListItem("webLinks", index, index - 1);
+      renderWebLinks();
+    });
+
+    moveDownButton.addEventListener("click", async () => {
+      await moveListItem("webLinks", index, index + 1);
+      renderWebLinks();
     });
 
     deleteButton.addEventListener("click", async () => {
@@ -383,84 +461,6 @@ function renderWebLinks() {
   });
 }
 
-async function handleTaskSubmit(event) {
-  event.preventDefault();
-  const title = elements.taskInput.value.trim();
-  if (!title) {
-    return;
-  }
-
-  state.data.tasks.unshift({
-    id: createId(),
-    title,
-    done: false,
-    createdAt: Date.now()
-  });
-
-  await persistState();
-  elements.taskForm.reset();
-  renderTasks();
-}
-
-function renderTaskFilter() {
-  elements.taskFilters.forEach((button) => {
-    button.classList.toggle("is-active", button.dataset.filter === state.taskFilter);
-  });
-}
-
-function renderTasks() {
-  elements.taskList.innerHTML = "";
-
-  const completedCount = state.data.tasks.filter((task) => task.done).length;
-  if (elements.taskSummary) {
-    elements.taskSummary.textContent = `${completedCount} / ${state.data.tasks.length} 完了`;
-  }
-
-  const visibleTasks = state.data.tasks.filter((task) => {
-    if (state.taskFilter === "open") {
-      return !task.done;
-    }
-    if (state.taskFilter === "done") {
-      return task.done;
-    }
-    return true;
-  });
-
-  if (visibleTasks.length === 0) {
-    const message = state.data.tasks.length === 0
-      ? "まだタスクがありません。"
-      : "この条件に当てはまるタスクはありません。";
-    elements.taskList.append(createEmptyState(message));
-    return;
-  }
-
-  visibleTasks.forEach((task) => {
-    const fragment = elements.taskTemplate.content.cloneNode(true);
-    const row = fragment.querySelector(".task-row");
-    const checkbox = fragment.querySelector('input[type="checkbox"]');
-    const label = fragment.querySelector("span");
-    const deleteButton = fragment.querySelector('[data-action="delete"]');
-
-    row.classList.toggle("is-done", task.done);
-    checkbox.checked = task.done;
-    label.textContent = task.title;
-
-    checkbox.addEventListener("change", async () => {
-      task.done = checkbox.checked;
-      await persistState();
-      renderTasks();
-    });
-
-    deleteButton.addEventListener("click", async () => {
-      state.data.tasks = state.data.tasks.filter((item) => item.id !== task.id);
-      await persistState();
-      renderTasks();
-    });
-
-    elements.taskList.append(row);
-  });
-}
-
 function createEmptyState(message) {
   const div = document.createElement("div");
   div.className = "empty-state";
@@ -468,7 +468,18 @@ function createEmptyState(message) {
   return div;
 }
 
-function openSnippetModal(title = "定型文を登録") {
+async function moveListItem(key, fromIndex, toIndex) {
+  const list = state.data[key];
+  if (!Array.isArray(list) || fromIndex === toIndex || toIndex < 0 || toIndex >= list.length) {
+    return;
+  }
+
+  const [item] = list.splice(fromIndex, 1);
+  list.splice(toIndex, 0, item);
+  await persistState();
+}
+
+function openSnippetModal(title = "定型文を追加") {
   document.querySelector("#snippet-modal-title").textContent = title;
   elements.snippetModal.hidden = false;
   elements.snippetTitle.focus();
@@ -479,7 +490,7 @@ function closeSnippetModal() {
   resetSnippetForm();
 }
 
-function openWebModal(title = "Webを登録") {
+function openWebModal(title = "Webを追加") {
   document.querySelector("#web-modal-title").textContent = title;
   elements.webModal.hidden = false;
   elements.webTitle.focus();
