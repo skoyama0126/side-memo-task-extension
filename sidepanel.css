@@ -313,8 +313,8 @@ button {
 .item-card,
 .task-row {
   display: grid;
-  gap: 14px;
-  padding: 14px;
+  gap: 5px;
+  padding: 8px 14px;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.9);
@@ -326,8 +326,9 @@ button {
 
 .item-card__body p {
   color: var(--muted);
-  white-space: pre-wrap;
-  word-break: break-word;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   line-height: 1.6;
 }
 
