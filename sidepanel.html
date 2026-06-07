@@ -21,7 +21,6 @@
         <button class="tab-button" data-tab="snippets" type="button">定型文</button>
         <button class="tab-button" data-tab="tasks" type="button">TODO</button>
         <button class="tab-button" data-tab="web" type="button">Web</button>
-        <button class="tab-button" data-tab="shortcuts" type="button">ShortCut</button>
       </nav>
 
       <main>
@@ -66,13 +65,6 @@
             <button id="web-open-modal" class="memo-tool-button memo-tool-button--add" type="button">+</button>
           </div>
           <div id="web-list" class="stack-list"></div>
-        </section>
-
-        <section class="panel" data-panel="shortcuts">
-          <div class="panel-header">
-            <button id="shortcut-open-modal" class="memo-tool-button memo-tool-button--add" type="button">+</button>
-          </div>
-          <div id="shortcut-list" class="stack-list"></div>
         </section>
       </main>
     </div>
@@ -160,32 +152,8 @@
             <input id="web-title" type="text" maxlength="60" placeholder="例: ChatGPT" required />
           </label>
           <label>
-            <span>URL</span>
-            <input id="web-url" type="text" maxlength="2000" placeholder="https://example.com" required />
-          </label>
-          <div class="form-actions">
-            <button class="primary-button" type="submit">保存</button>
-          </div>
-        </form>
-      </div>
-    </div>
-
-    <div id="shortcut-modal" class="modal" hidden>
-      <div class="modal__backdrop" data-action="close-shortcut-modal"></div>
-      <div class="modal__dialog" role="dialog" aria-modal="true" aria-labelledby="shortcut-modal-title">
-        <div class="modal__header">
-          <h3 id="shortcut-modal-title">ShortCutを追加</h3>
-          <button id="shortcut-modal-close" class="icon-letter-button" type="button" aria-label="閉じる">×</button>
-        </div>
-        <form id="shortcut-form" class="card-form card-form--modal">
-          <input type="hidden" id="shortcut-edit-id" />
-          <label>
-            <span>タイトル</span>
-            <input id="shortcut-title" type="text" maxlength="60" placeholder="例: ローカルLP" required />
-          </label>
-          <label>
-            <span>起動先</span>
-            <input id="shortcut-target" type="text" maxlength="2000" placeholder="file:///C:/path/to/index.html" required />
+            <span>URL / ローカル HTML</span>
+            <input id="web-url" type="text" maxlength="2000" placeholder="https://example.com または C:\path\to\index.html" required />
           </label>
           <div class="form-actions">
             <button class="primary-button" type="submit">保存</button>

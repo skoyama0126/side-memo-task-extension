@@ -7,7 +7,7 @@ chrome.runtime.onStartup.addListener(async () => {
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message?.type !== "open-shortcut-target" || typeof message.url !== "string") {
+  if (message?.type !== "open-link-target" || typeof message.url !== "string") {
     return false;
   }
 

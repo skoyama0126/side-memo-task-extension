@@ -2,13 +2,12 @@
 
 Google Chrome の Side Panel で使う、個人用のメモ管理拡張です。
 
-1つのサイドパネルの中で、次の 5 つをまとめて扱えます。
+1つのサイドパネルの中で、次の 4 つをまとめて扱えます。
 
 - メモ
 - 定型文
 - TODO
 - Web
-- ShortCut
 
 ## 特徴
 
@@ -52,24 +51,16 @@ Google Chrome の Side Panel で使う、個人用のメモ管理拡張です。
 - `↑` `↓` で並び替え
 - `×` で削除
 - `https://` なしで入力した場合は自動補完
+- `file:///...html`
+- `C:\...\index.html`
+  のようなローカル HTML も登録可能
 
-### ShortCut
+## ローカル HTML の扱い
 
-- タイトルと起動先を保存
-- タイトルクリックで Chrome タブとして開く
-- `編` で編集
-- `↑` `↓` で並び替え
-- `×` で削除
-- `file:///...` のローカル HTML やファイル URL を登録可能
-- `C:\...` のような Windows パスは `file:///C:/...` に変換して保存
-
-## ShortCut の注意点
-
-- `ShortCut` は Chrome 拡張の範囲で動作します。
-- `file:///.../index.html` のような HTML は Chrome で開けます。
-- `C:\path\to\file.html` のような入力も `file:///` 形式へ変換して開けます。
-- フォルダを Windows エクスプローラで直接開く処理は、Chrome 拡張だけでは基本的にできません。
-- `file:///...` を使う場合は、Chrome の拡張詳細画面で「ファイルの URL へのアクセスを許可」をオンにしてください。
+- `C:\path\to\index.html` のような Windows パスは `file:///C:/path/to/index.html` に変換して保存します
+- `file:///...html` はそのまま登録できます
+- フォルダではなく `.html` / `.htm` ファイルを想定しています
+- 利用時は Chrome の拡張詳細画面で「ファイルの URL へのアクセスを許可」をオンにしてください
 
 ## インストール
 
