@@ -157,8 +157,8 @@ button {
 }
 
 .memo-slot-button.is-active {
-  border-color: var(--accent-strong);
-  background: linear-gradient(180deg, #f7b447, #ef9c22);
+  border-color: #56cd00;
+  background: #71d32a;
   color: #ffffff;
 }
 
@@ -176,13 +176,13 @@ button {
 }
 
 .memo-tool-button--add {
-  border-color: var(--success-strong);
-  background: linear-gradient(180deg, #53b553, #3c9d3c);
+  border-color: #3f78d6;
+  background: linear-gradient(180deg, #78abff, #19d8ff);
 }
 
 .memo-tool-button--remove {
-  border-color: var(--danger-strong);
-  background: linear-gradient(180deg, #df5a5a, #c93b3b);
+  border-color: #ea1919;
+  background: linear-gradient(180deg, #ffbdbd, #ec4f4f);
 }
 
 .memo-input,
