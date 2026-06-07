@@ -7,7 +7,8 @@ const defaultState = {
   selectedMemoId: null,
   snippets: [],
   tasks: [],
-  webLinks: []
+  webLinks: [],
+  shortcuts: []
 };
 
 const state = {
@@ -42,7 +43,15 @@ const elements = {
   webTitle: document.querySelector("#web-title"),
   webUrl: document.querySelector("#web-url"),
   webList: document.querySelector("#web-list"),
-  webTemplate: document.querySelector("#web-item-template"),
+  shortcutModal: document.querySelector("#shortcut-modal"),
+  shortcutOpenModal: document.querySelector("#shortcut-open-modal"),
+  shortcutModalClose: document.querySelector("#shortcut-modal-close"),
+  shortcutForm: document.querySelector("#shortcut-form"),
+  shortcutEditId: document.querySelector("#shortcut-edit-id"),
+  shortcutTitle: document.querySelector("#shortcut-title"),
+  shortcutTarget: document.querySelector("#shortcut-target"),
+  shortcutList: document.querySelector("#shortcut-list"),
+  linkTemplate: document.querySelector("#link-item-template"),
   taskForm: document.querySelector("#task-form"),
   taskInput: document.querySelector("#task-input"),
   taskList: document.querySelector("#task-list"),
@@ -86,6 +95,15 @@ function bindEvents() {
     }
   });
   elements.webForm.addEventListener("submit", handleWebSubmit);
+
+  elements.shortcutOpenModal.addEventListener("click", () => openShortcutModal());
+  elements.shortcutModalClose.addEventListener("click", closeShortcutModal);
+  elements.shortcutModal.addEventListener("click", (event) => {
+    if (event.target.dataset.action === "close-shortcut-modal") {
+      closeShortcutModal();
+    }
+  });
+  elements.shortcutForm.addEventListener("submit", handleShortcutSubmit);
 
   elements.taskForm.addEventListener("submit", handleTaskSubmit);
 }
@@ -137,11 +155,25 @@ function normalizeState(savedState) {
       createdAt: task.createdAt || Date.now()
     }));
 
-  if (!Array.isArray(normalized.webLinks)) {
-    normalized.webLinks = [];
-  }
+  normalized.webLinks = normalizeLinkList(normalized.webLinks);
+  normalized.shortcuts = normalizeLinkList(normalized.shortcuts);
 
   return normalized;
+}
+
+function normalizeLinkList(list) {
+  if (!Array.isArray(list)) {
+    return [];
+  }
+
+  return list
+    .filter((item) => item && typeof item.title === "string" && typeof item.url === "string")
+    .map((item) => ({
+      id: item.id || createId(),
+      title: item.title,
+      url: item.url,
+      createdAt: item.createdAt || Date.now()
+    }));
 }
 
 async function persistState() {
@@ -153,6 +185,7 @@ function renderAll() {
   renderSnippets();
   renderTasks();
   renderWebLinks();
+  renderShortcuts();
 }
 
 function switchTab(tabName) {
@@ -381,41 +414,74 @@ function renderTasks() {
 async function handleWebSubmit(event) {
   event.preventDefault();
   const title = elements.webTitle.value.trim();
-  const url = normalizeUrl(elements.webUrl.value.trim());
+  const url = normalizeWebUrl(elements.webUrl.value.trim());
 
   if (!title || !url) {
     return;
   }
 
-  const editId = elements.webEditId.value;
-  if (editId) {
-    state.data.webLinks = state.data.webLinks.map((item) =>
-      item.id === editId ? { ...item, title, url } : item
-    );
-  } else {
-    state.data.webLinks.unshift({
-      id: createId(),
-      title,
-      url,
-      createdAt: Date.now()
-    });
-  }
-
+  saveLinkItem("webLinks", elements.webEditId.value, title, url);
   await persistState();
   closeWebModal();
   renderWebLinks();
 }
 
 function renderWebLinks() {
-  elements.webList.innerHTML = "";
+  renderLinkList({
+    listKey: "webLinks",
+    emptyMessage: "まだWebリンクがありません。",
+    container: elements.webList,
+    onEdit: (item) => {
+      elements.webEditId.value = item.id;
+      elements.webTitle.value = item.title;
+      elements.webUrl.value = item.url;
+      switchTab("web");
+      openWebModal("Webを編集");
+    }
+  });
+}
 
-  if (state.data.webLinks.length === 0) {
-    elements.webList.append(createEmptyState("まだWebリンクがありません。"));
+async function handleShortcutSubmit(event) {
+  event.preventDefault();
+  const title = elements.shortcutTitle.value.trim();
+  const target = normalizeShortcutTarget(elements.shortcutTarget.value.trim());
+
+  if (!title || !target) {
     return;
   }
 
-  state.data.webLinks.forEach((item, index) => {
-    const fragment = elements.webTemplate.content.cloneNode(true);
+  saveLinkItem("shortcuts", elements.shortcutEditId.value, title, target);
+  await persistState();
+  closeShortcutModal();
+  renderShortcuts();
+}
+
+function renderShortcuts() {
+  renderLinkList({
+    listKey: "shortcuts",
+    emptyMessage: "まだShortCutがありません。",
+    container: elements.shortcutList,
+    onEdit: (item) => {
+      elements.shortcutEditId.value = item.id;
+      elements.shortcutTitle.value = item.title;
+      elements.shortcutTarget.value = item.url;
+      switchTab("shortcuts");
+      openShortcutModal("ShortCutを編集");
+    }
+  });
+}
+
+function renderLinkList({ listKey, emptyMessage, container, onEdit }) {
+  container.innerHTML = "";
+  const list = state.data[listKey];
+
+  if (list.length === 0) {
+    container.append(createEmptyState(emptyMessage));
+    return;
+  }
+
+  list.forEach((item, index) => {
+    const fragment = elements.linkTemplate.content.cloneNode(true);
     const card = fragment.querySelector(".item-card");
     const titleButton = fragment.querySelector(".snippet-title-button");
     const body = fragment.querySelector("p");
@@ -427,37 +493,49 @@ function renderWebLinks() {
     titleButton.textContent = item.title;
     body.textContent = item.url;
     moveUpButton.disabled = index === 0;
-    moveDownButton.disabled = index === state.data.webLinks.length - 1;
+    moveDownButton.disabled = index === list.length - 1;
 
     titleButton.addEventListener("click", () => {
-      openWebLink(item.url);
+      openLinkTarget(item.url);
     });
 
     editButton.addEventListener("click", () => {
-      elements.webEditId.value = item.id;
-      elements.webTitle.value = item.title;
-      elements.webUrl.value = item.url;
-      switchTab("web");
-      openWebModal("Webを編集");
+      onEdit(item);
     });
 
     moveUpButton.addEventListener("click", async () => {
-      await moveListItem("webLinks", index, index - 1);
-      renderWebLinks();
+      await moveListItem(listKey, index, index - 1);
+      renderAll();
     });
 
     moveDownButton.addEventListener("click", async () => {
-      await moveListItem("webLinks", index, index + 1);
-      renderWebLinks();
+      await moveListItem(listKey, index, index + 1);
+      renderAll();
     });
 
     deleteButton.addEventListener("click", async () => {
-      state.data.webLinks = state.data.webLinks.filter((webLink) => webLink.id !== item.id);
+      state.data[listKey] = state.data[listKey].filter((entry) => entry.id !== item.id);
       await persistState();
-      renderWebLinks();
+      renderAll();
     });
 
-    elements.webList.append(card);
+    container.append(card);
+  });
+}
+
+function saveLinkItem(listKey, editId, title, url) {
+  if (editId) {
+    state.data[listKey] = state.data[listKey].map((item) =>
+      item.id === editId ? { ...item, title, url } : item
+    );
+    return;
+  }
+
+  state.data[listKey].unshift({
+    id: createId(),
+    title,
+    url,
+    createdAt: Date.now()
   });
 }
 
@@ -506,20 +584,66 @@ function resetWebForm() {
   elements.webEditId.value = "";
 }
 
-function normalizeUrl(value) {
+function openShortcutModal(title = "ShortCutを追加") {
+  document.querySelector("#shortcut-modal-title").textContent = title;
+  elements.shortcutModal.hidden = false;
+  elements.shortcutTitle.focus();
+}
+
+function closeShortcutModal() {
+  elements.shortcutModal.hidden = true;
+  resetShortcutForm();
+}
+
+function resetShortcutForm() {
+  elements.shortcutForm.reset();
+  elements.shortcutEditId.value = "";
+}
+
+function normalizeWebUrl(value) {
   if (!value) {
     return "";
   }
 
-  if (/^https?:\/\//i.test(value)) {
+  if (/^[a-z][a-z0-9+.-]*:/i.test(value)) {
     return value;
   }
 
   return `https://${value}`;
 }
 
-function openWebLink(url) {
-  window.open(url, "_blank", "noopener,noreferrer");
+function normalizeShortcutTarget(value) {
+  if (!value) {
+    return "";
+  }
+
+  if (/^[a-z][a-z0-9+.-]*:/i.test(value)) {
+    return value;
+  }
+
+  if (/^[A-Za-z]:[\\/]/.test(value)) {
+    return `file:///${value.replace(/\\/g, "/")}`;
+  }
+
+  return value;
+}
+
+async function openLinkTarget(url) {
+  try {
+    const response = await chrome.runtime.sendMessage({
+      type: "open-shortcut-target",
+      url
+    });
+
+    if (!response?.ok) {
+      throw new Error(response?.error || "Failed to open target");
+    }
+  } catch (error) {
+    console.error("Failed to open link target", error);
+    window.alert(
+      "起動に失敗しました。file:/// を使う場合は、この拡張の『ファイルの URL へのアクセスを許可』も確認してください。"
+    );
+  }
 }
 
 async function flushPendingMemoSave() {
