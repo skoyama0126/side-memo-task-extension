@@ -237,6 +237,11 @@ async function handleMemoRemove() {
     return;
   }
 
+  const shouldDelete = window.confirm("選択中のメモを削除しますか？");
+  if (!shouldDelete) {
+    return;
+  }
+
   const currentIndex = state.data.memos.findIndex((memo) => memo.id === state.data.selectedMemoId);
   state.data.memos = state.data.memos.filter((memo) => memo.id !== state.data.selectedMemoId);
   const nextIndex = Math.max(0, currentIndex - 1);

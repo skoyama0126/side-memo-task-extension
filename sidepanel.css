@@ -148,7 +148,7 @@ button {
 .memo-slot-button,
 .memo-tool-button {
   min-width: 40px;
-  height: 35px;
+  height: 35px !important;
   border: 1px solid var(--line);
   border-radius: 6px;
   background: linear-gradient(180deg, #ffffff, #e7e7e7);
@@ -249,8 +249,7 @@ button {
 }
 
 .inline-form .memo-tool-button {
-  height: auto;
-  align-self: stretch;
+  align-self: center;
   display: flex;
   align-items: center;
   justify-content: center;
