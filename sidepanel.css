@@ -31,7 +31,8 @@ body {
 
 button,
 input,
-textarea {
+textarea,
+select {
   font: inherit;
 }
 
@@ -116,7 +117,7 @@ button {
 }
 
 .panel-header {
-  justify-content: flex-end;
+  justify-content: space-between;
   margin-bottom: 12px;
 }
 
@@ -188,6 +189,7 @@ button {
 
 .memo-input,
 .card-form input,
+.card-form select,
 .card-form textarea,
 .inline-form input {
   width: 100%;
@@ -221,7 +223,7 @@ button {
 .stack-list,
 .inline-form {
   display: grid;
-  gap: 12px;
+  gap: 8px;
 }
 
 .card-form {
@@ -241,6 +243,18 @@ button {
 .card-form span {
   font-size: 13px;
   color: var(--muted);
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.checkbox-row input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
 }
 
 .inline-form {
@@ -409,6 +423,59 @@ button {
   background: rgba(255, 255, 255, 0.75);
 }
 
+.group-header {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 0;
+  background: rgba(63, 120, 214, 0.14);
+  box-shadow: none;
+  color: #234f95;
+  text-align: left;
+}
+
+.group-header__main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.group-header__toggle {
+  width: 12px;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+  text-align: center;
+}
+
+.group-header__title {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: 0.01em;
+}
+
+.group-header:hover {
+  background: rgba(63, 120, 214, 0.2);
+}
+
+.category-row__meta {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.category-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.category-row__label-wrap {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
 .modal[hidden] {
   display: none;
 }
@@ -454,6 +521,27 @@ button {
   border: 0;
   background: transparent;
   padding: 0;
+}
+
+.modal__body {
+  margin-bottom: 16px;
+}
+
+.modal__body p {
+  margin: 0;
+  color: var(--text);
+}
+
+.form-actions--danger {
+  justify-content: flex-end;
+}
+
+.primary-button--danger {
+  background: #bb2d3b;
+}
+
+.primary-button--danger:hover {
+  background: #a12632;
 }
 
 .sr-only {

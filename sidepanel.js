@@ -1,18 +1,22 @@
 const STORAGE_KEY = "sideMemoDeskState";
 const MAX_MEMO_SLOTS = 30;
-const BACKUP_VERSION = 1;
+const BACKUP_VERSION = 2;
+const UNCATEGORIZED_ID = "uncategorized";
 
 const defaultState = {
   memos: [{ id: createId(), content: "" }],
   selectedMemoId: null,
   snippets: [],
   tasks: [],
-  webLinks: []
+  webLinks: [],
+  webCategories: [],
+  webCategoryVisibility: {}
 };
 
 const state = {
   data: structuredClone(defaultState),
-  memoSaveTimer: null
+  memoSaveTimer: null,
+  webMode: "links"
 };
 
 const elements = {
@@ -34,15 +38,28 @@ const elements = {
   snippetBody: document.querySelector("#snippet-body"),
   snippetList: document.querySelector("#snippet-list"),
   snippetTemplate: document.querySelector("#snippet-item-template"),
+  webModeToggle: document.querySelector("#web-mode-toggle"),
   webModal: document.querySelector("#web-modal"),
   webOpenModal: document.querySelector("#web-open-modal"),
   webModalClose: document.querySelector("#web-modal-close"),
   webForm: document.querySelector("#web-form"),
   webEditId: document.querySelector("#web-edit-id"),
   webTitle: document.querySelector("#web-title"),
+  webCategory: document.querySelector("#web-category"),
   webUrl: document.querySelector("#web-url"),
   webList: document.querySelector("#web-list"),
   linkTemplate: document.querySelector("#link-item-template"),
+  categoryModal: document.querySelector("#category-modal"),
+  categoryModalClose: document.querySelector("#category-modal-close"),
+  categoryForm: document.querySelector("#category-form"),
+  categoryEditId: document.querySelector("#category-edit-id"),
+  categoryName: document.querySelector("#category-name"),
+  categoryDefaultExpanded: document.querySelector("#category-default-expanded"),
+  deleteConfirmModal: document.querySelector("#delete-confirm-modal"),
+  deleteConfirmClose: document.querySelector("#delete-confirm-close"),
+  deleteConfirmMessage: document.querySelector("#delete-confirm-message"),
+  deleteConfirmCancel: document.querySelector("#delete-confirm-cancel"),
+  deleteConfirmSubmit: document.querySelector("#delete-confirm-submit"),
   taskForm: document.querySelector("#task-form"),
   taskInput: document.querySelector("#task-input"),
   taskList: document.querySelector("#task-list"),
@@ -50,6 +67,8 @@ const elements = {
 };
 
 document.addEventListener("DOMContentLoaded", init);
+
+let deleteConfirmResolver = null;
 
 async function init() {
   bindEvents();
@@ -78,7 +97,17 @@ function bindEvents() {
   });
   elements.snippetForm.addEventListener("submit", handleSnippetSubmit);
 
-  elements.webOpenModal.addEventListener("click", () => openWebModal());
+  elements.webModeToggle.addEventListener("click", () => {
+    state.webMode = state.webMode === "links" ? "categories" : "links";
+    renderWebPanel();
+  });
+  elements.webOpenModal.addEventListener("click", () => {
+    if (state.webMode === "categories") {
+      openCategoryModal();
+      return;
+    }
+    openWebModal();
+  });
   elements.webModalClose.addEventListener("click", closeWebModal);
   elements.webModal.addEventListener("click", (event) => {
     if (event.target.dataset.action === "close-web-modal") {
@@ -86,6 +115,23 @@ function bindEvents() {
     }
   });
   elements.webForm.addEventListener("submit", handleWebSubmit);
+
+  elements.categoryModalClose.addEventListener("click", closeCategoryModal);
+  elements.categoryModal.addEventListener("click", (event) => {
+    if (event.target.dataset.action === "close-category-modal") {
+      closeCategoryModal();
+    }
+  });
+  elements.categoryForm.addEventListener("submit", handleCategorySubmit);
+
+  elements.deleteConfirmClose.addEventListener("click", () => resolveDeleteConfirm(false));
+  elements.deleteConfirmCancel.addEventListener("click", () => resolveDeleteConfirm(false));
+  elements.deleteConfirmSubmit.addEventListener("click", () => resolveDeleteConfirm(true));
+  elements.deleteConfirmModal.addEventListener("click", (event) => {
+    if (event.target.dataset.action === "close-delete-modal") {
+      resolveDeleteConfirm(false);
+    }
+  });
 
   elements.taskForm.addEventListener("submit", handleTaskSubmit);
 }
@@ -137,15 +183,38 @@ function normalizeState(savedState) {
       createdAt: task.createdAt || Date.now()
     }));
 
-  normalized.webLinks = normalizeLinkList(normalized.webLinks);
+  normalized.webCategories = normalizeCategoryList(normalized.webCategories);
+  normalized.webLinks = normalizeLinkList(normalized.webLinks, normalized.webCategories);
+  normalized.webCategoryVisibility = normalizeCategoryVisibility(
+    normalized.webCategoryVisibility,
+    normalized.webCategories
+  );
 
   return normalized;
 }
 
-function normalizeLinkList(list) {
+function normalizeCategoryList(list) {
   if (!Array.isArray(list)) {
     return [];
   }
+
+  return list
+    .filter((item) => item && typeof item.name === "string")
+    .map((item) => ({
+      id: item.id || createId(),
+      name: item.name.trim(),
+      defaultExpanded: item.defaultExpanded !== false,
+      createdAt: item.createdAt || Date.now()
+    }))
+    .filter((item) => item.name && item.id !== UNCATEGORIZED_ID);
+}
+
+function normalizeLinkList(list, categories = state.data.webCategories) {
+  if (!Array.isArray(list)) {
+    return [];
+  }
+
+  const categoryIds = new Set(categories.map((category) => category.id));
 
   return list
     .filter((item) => item && typeof item.title === "string" && typeof item.url === "string")
@@ -153,8 +222,40 @@ function normalizeLinkList(list) {
       id: item.id || createId(),
       title: item.title,
       url: item.url,
+      categoryId: item.categoryId && categoryIds.has(item.categoryId) ? item.categoryId : UNCATEGORIZED_ID,
       createdAt: item.createdAt || Date.now()
     }));
+}
+
+function normalizeCategoryVisibility(visibility, categories = []) {
+  const nextVisibility = {};
+
+  [UNCATEGORIZED_ID, ...categories.map((category) => category.id)].forEach((categoryId) => {
+    const category = categories.find((item) => item.id === categoryId);
+    const defaultExpanded = category ? category.defaultExpanded !== false : true;
+    nextVisibility[categoryId] = defaultExpanded;
+  });
+
+  return nextVisibility;
+}
+
+function getAllCategories() {
+  return [
+    { id: UNCATEGORIZED_ID, name: "未分類", fixed: true },
+    ...state.data.webCategories
+  ];
+}
+
+function getCategoryName(categoryId) {
+  return getAllCategories().find((category) => category.id === categoryId)?.name || "未分類";
+}
+
+function getLinksForCategory(categoryId) {
+  return state.data.webLinks.filter((item) => (item.categoryId || UNCATEGORIZED_ID) === categoryId);
+}
+
+function isCategoryExpanded(categoryId) {
+  return state.data.webCategoryVisibility?.[categoryId] !== false;
 }
 
 async function persistState() {
@@ -165,7 +266,8 @@ function renderAll() {
   renderMemoSlots();
   renderSnippets();
   renderTasks();
-  renderWebLinks();
+  renderWebCategoryOptions();
+  renderWebPanel();
 }
 
 function switchTab(tabName) {
@@ -237,7 +339,7 @@ async function handleMemoRemove() {
     return;
   }
 
-  const shouldDelete = window.confirm("選択中のメモを削除しますか？");
+  const shouldDelete = await confirmDelete("選択中のメモを削除しますか？");
   if (!shouldDelete) {
     return;
   }
@@ -329,6 +431,11 @@ function renderSnippets() {
     });
 
     deleteButton.addEventListener("click", async () => {
+      const shouldDelete = await confirmDelete(`「${snippet.title}」を削除しますか？`);
+      if (!shouldDelete) {
+        return;
+      }
+
       state.data.snippets = state.data.snippets.filter((item) => item.id !== snippet.id);
       await persistState();
       renderSnippets();
@@ -387,6 +494,11 @@ function renderTasks() {
     });
 
     deleteButton.addEventListener("click", async () => {
+      const shouldDelete = await confirmDelete(`「${task.title}」を削除しますか？`);
+      if (!shouldDelete) {
+        return;
+      }
+
       state.data.tasks = state.data.tasks.filter((item) => item.id !== task.id);
       await persistState();
       renderTasks();
@@ -400,6 +512,7 @@ async function handleWebSubmit(event) {
   event.preventDefault();
   const title = elements.webTitle.value.trim();
   const url = normalizeWebTarget(elements.webUrl.value.trim());
+  const categoryId = getValidCategoryId(elements.webCategory.value);
 
   if (!title || !url) {
     return;
@@ -408,19 +521,78 @@ async function handleWebSubmit(event) {
   const editId = elements.webEditId.value;
   if (editId) {
     state.data.webLinks = state.data.webLinks.map((item) =>
-      item.id === editId ? { ...item, title, url } : item
+      item.id === editId ? { ...item, title, url, categoryId } : item
     );
   } else {
     state.data.webLinks.unshift({
       id: createId(),
       title,
       url,
+      categoryId,
       createdAt: Date.now()
     });
   }
 
   await persistState();
   closeWebModal();
+  renderWebPanel();
+}
+
+async function handleCategorySubmit(event) {
+  event.preventDefault();
+  const name = elements.categoryName.value.trim();
+  const defaultExpanded = elements.categoryDefaultExpanded.checked;
+  if (!name) {
+    return;
+  }
+
+  const editId = elements.categoryEditId.value;
+  if (editId) {
+    state.data.webCategories = state.data.webCategories.map((category) =>
+      category.id === editId ? { ...category, name, defaultExpanded } : category
+    );
+    state.data.webCategoryVisibility[editId] = defaultExpanded;
+  } else {
+    const id = createId();
+    state.data.webCategories.push({
+      id,
+      name,
+      defaultExpanded,
+      createdAt: Date.now()
+    });
+    state.data.webCategoryVisibility[id] = defaultExpanded;
+  }
+
+  state.data.webLinks = normalizeLinkList(state.data.webLinks, state.data.webCategories);
+  await persistState();
+  closeCategoryModal();
+  renderWebCategoryOptions();
+  renderWebPanel();
+}
+
+function renderWebCategoryOptions() {
+  const selectedValue = getValidCategoryId(elements.webCategory.value);
+  elements.webCategory.innerHTML = "";
+
+  getAllCategories().forEach((category) => {
+    const option = document.createElement("option");
+    option.value = category.id;
+    option.textContent = category.name;
+    elements.webCategory.append(option);
+  });
+
+  elements.webCategory.value = selectedValue;
+}
+
+function renderWebPanel() {
+  elements.webModeToggle.textContent = state.webMode === "links" ? "カテゴリ一覧" : "Web一覧へ戻る";
+  elements.webOpenModal.setAttribute("aria-label", state.webMode === "links" ? "Webを追加" : "カテゴリを追加");
+
+  if (state.webMode === "categories") {
+    renderWebCategories();
+    return;
+  }
+
   renderWebLinks();
 }
 
@@ -432,51 +604,207 @@ function renderWebLinks() {
     return;
   }
 
-  state.data.webLinks.forEach((item, index) => {
-    const fragment = elements.linkTemplate.content.cloneNode(true);
-    const card = fragment.querySelector(".item-card");
-    const titleButton = fragment.querySelector(".snippet-title-button");
-    const body = fragment.querySelector("p");
-    const editButton = fragment.querySelector('[data-action="edit"]');
-    const moveUpButton = fragment.querySelector('[data-action="move-up"]');
-    const moveDownButton = fragment.querySelector('[data-action="move-down"]');
-    const deleteButton = fragment.querySelector('[data-action="delete"]');
-
-    titleButton.textContent = item.title;
-    body.textContent = item.url;
-    moveUpButton.disabled = index === 0;
-    moveDownButton.disabled = index === state.data.webLinks.length - 1;
-
-    titleButton.addEventListener("click", async () => {
-      await openLinkTarget(item.url);
+  const categories = getAllCategories()
+    .filter((category) => getLinksForCategory(category.id).length > 0)
+    .sort((left, right) => {
+      if (left.id === UNCATEGORIZED_ID) {
+        return 1;
+      }
+      if (right.id === UNCATEGORIZED_ID) {
+        return -1;
+      }
+      return 0;
     });
 
-    editButton.addEventListener("click", () => {
-      elements.webEditId.value = item.id;
-      elements.webTitle.value = item.title;
-      elements.webUrl.value = item.url;
-      switchTab("web");
-      openWebModal("Webを編集");
-    });
+  categories.forEach((category) => {
+    const items = getLinksForCategory(category.id);
+    const isExpanded = isCategoryExpanded(category.id);
+    elements.webList.append(createGroupHeader(category, items.length, isExpanded));
 
-    moveUpButton.addEventListener("click", async () => {
-      await moveListItem("webLinks", index, index - 1);
-      renderWebLinks();
-    });
+    if (!isExpanded) {
+      return;
+    }
 
-    moveDownButton.addEventListener("click", async () => {
-      await moveListItem("webLinks", index, index + 1);
-      renderWebLinks();
-    });
+    items.forEach((item) => {
+      const absoluteIndex = state.data.webLinks.findIndex((entry) => entry.id === item.id);
+      const fragment = elements.linkTemplate.content.cloneNode(true);
+      const card = fragment.querySelector(".item-card");
+      const titleButton = fragment.querySelector(".snippet-title-button");
+      const body = fragment.querySelector("p");
+      const editButton = fragment.querySelector('[data-action="edit"]');
+      const moveUpButton = fragment.querySelector('[data-action="move-up"]');
+      const moveDownButton = fragment.querySelector('[data-action="move-down"]');
+      const deleteButton = fragment.querySelector('[data-action="delete"]');
 
-    deleteButton.addEventListener("click", async () => {
-      state.data.webLinks = state.data.webLinks.filter((webLink) => webLink.id !== item.id);
-      await persistState();
-      renderWebLinks();
-    });
+      titleButton.textContent = item.title;
+      body.textContent = item.url;
+      moveUpButton.disabled = absoluteIndex === 0;
+      moveDownButton.disabled = absoluteIndex === state.data.webLinks.length - 1;
 
-    elements.webList.append(card);
+      titleButton.addEventListener("click", async () => {
+        await openLinkTarget(item.url);
+      });
+
+      editButton.addEventListener("click", () => {
+        elements.webEditId.value = item.id;
+        elements.webTitle.value = item.title;
+        elements.webUrl.value = item.url;
+        renderWebCategoryOptions();
+        elements.webCategory.value = getValidCategoryId(item.categoryId);
+        switchTab("web");
+        openWebModal("Webを編集");
+      });
+
+      moveUpButton.addEventListener("click", async () => {
+        await moveListItem("webLinks", absoluteIndex, absoluteIndex - 1);
+        renderWebPanel();
+      });
+
+      moveDownButton.addEventListener("click", async () => {
+        await moveListItem("webLinks", absoluteIndex, absoluteIndex + 1);
+        renderWebPanel();
+      });
+
+      deleteButton.addEventListener("click", async () => {
+        const shouldDelete = await confirmDelete(`「${item.title}」を削除しますか？`);
+        if (!shouldDelete) {
+          return;
+        }
+
+        state.data.webLinks = state.data.webLinks.filter((webLink) => webLink.id !== item.id);
+        await persistState();
+        renderWebPanel();
+      });
+
+      elements.webList.append(card);
+    });
   });
+}
+
+function renderWebCategories() {
+  elements.webList.innerHTML = "";
+
+  if (state.data.webCategories.length === 0) {
+    elements.webList.append(createEmptyState("まだカテゴリがありません。"));
+  } else {
+    state.data.webCategories.forEach((category, index) => {
+      elements.webList.append(createCategoryRow(category, index, state.data.webCategories.length, false));
+    });
+  }
+
+  const uncategorizedRow = createCategoryRow(
+    { id: UNCATEGORIZED_ID, name: "未分類", fixed: true },
+    0,
+    1,
+    true
+  );
+  elements.webList.append(uncategorizedRow);
+}
+
+function createCategoryRow(category, index, total, isFixed) {
+  const article = document.createElement("article");
+  article.className = "task-row category-row";
+
+  const labelWrap = document.createElement("div");
+  labelWrap.className = "category-row__label-wrap";
+
+  const label = document.createElement("span");
+  label.className = "task-row__label";
+  label.textContent = category.name;
+  labelWrap.append(label);
+
+  const sub = document.createElement("span");
+  sub.className = "category-row__meta";
+  sub.textContent = isFixed
+    ? `${getLinksForCategory(category.id).length}件 / 固定`
+    : `${getLinksForCategory(category.id).length}件 / 初期: ${category.defaultExpanded === false ? "閉" : "開"}`;
+  labelWrap.append(sub);
+
+  const actions = document.createElement("div");
+  actions.className = "task-row__actions";
+
+  if (!isFixed) {
+    const editButton = createIconButton("編", "編集", async () => {
+      elements.categoryEditId.value = category.id;
+      elements.categoryName.value = category.name;
+      elements.categoryDefaultExpanded.checked = category.defaultExpanded !== false;
+      openCategoryModal("カテゴリを編集");
+    });
+
+    const moveUpButton = createIconButton("↑", "上へ移動", async () => {
+      await moveListItem("webCategories", index, index - 1);
+      renderWebCategoryOptions();
+      renderWebPanel();
+    });
+    moveUpButton.disabled = index === 0;
+
+    const moveDownButton = createIconButton("↓", "下へ移動", async () => {
+      await moveListItem("webCategories", index, index + 1);
+      renderWebCategoryOptions();
+      renderWebPanel();
+    });
+    moveDownButton.disabled = index === total - 1;
+
+    const deleteButton = createIconButton("×", "削除", async () => {
+      const shouldDelete = await confirmDelete(`「${category.name}」を削除しますか？\n紐づくWebは未分類へ移動します。`);
+      if (!shouldDelete) {
+        return;
+      }
+
+      state.data.webCategories = state.data.webCategories.filter((item) => item.id !== category.id);
+      state.data.webLinks = state.data.webLinks.map((item) =>
+        item.categoryId === category.id ? { ...item, categoryId: UNCATEGORIZED_ID } : item
+      );
+      delete state.data.webCategoryVisibility[category.id];
+      await persistState();
+      renderWebCategoryOptions();
+      renderWebPanel();
+    }, true);
+
+    actions.append(editButton, moveUpButton, moveDownButton, deleteButton);
+  }
+
+  article.append(labelWrap, actions);
+  return article;
+}
+
+function createIconButton(label, ariaLabel, onClick, isDanger = false) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = `icon-letter-button${isDanger ? " icon-letter-button--danger" : ""}`;
+  button.setAttribute("aria-label", ariaLabel);
+  button.textContent = label;
+  button.addEventListener("click", onClick);
+  return button;
+}
+
+function createGroupHeader(category, count, isExpanded) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "group-header";
+  button.setAttribute("aria-expanded", isExpanded ? "true" : "false");
+  button.title = `${count}件`;
+
+  const titleWrap = document.createElement("span");
+  titleWrap.className = "group-header__main";
+
+  const toggle = document.createElement("span");
+  toggle.className = "group-header__toggle";
+  toggle.textContent = isExpanded ? "−" : "+";
+
+  const titleSpan = document.createElement("span");
+  titleSpan.className = "group-header__title";
+  titleSpan.textContent = category.name;
+
+  titleWrap.append(toggle, titleSpan);
+  button.append(titleWrap);
+  button.addEventListener("click", async () => {
+    state.data.webCategoryVisibility[category.id] = !isExpanded;
+    await persistState();
+    renderWebPanel();
+  });
+
+  return button;
 }
 
 function createEmptyState(message) {
@@ -510,6 +838,10 @@ function closeSnippetModal() {
 
 function openWebModal(title = "Webを追加") {
   document.querySelector("#web-modal-title").textContent = title;
+  renderWebCategoryOptions();
+  if (!elements.webEditId.value) {
+    elements.webCategory.value = UNCATEGORIZED_ID;
+  }
   elements.webModal.hidden = false;
   elements.webTitle.focus();
 }
@@ -519,9 +851,56 @@ function closeWebModal() {
   resetWebForm();
 }
 
+function openCategoryModal(title = "カテゴリを追加") {
+  document.querySelector("#category-modal-title").textContent = title;
+  elements.categoryModal.hidden = false;
+  elements.categoryName.focus();
+}
+
+function closeCategoryModal() {
+  elements.categoryModal.hidden = true;
+  resetCategoryForm();
+}
+
+function confirmDelete(message) {
+  if (deleteConfirmResolver) {
+    resolveDeleteConfirm(false);
+  }
+
+  elements.deleteConfirmMessage.textContent = message;
+  elements.deleteConfirmModal.hidden = false;
+
+  return new Promise((resolve) => {
+    deleteConfirmResolver = resolve;
+  });
+}
+
+function resolveDeleteConfirm(result) {
+  if (!deleteConfirmResolver) {
+    return;
+  }
+
+  const resolve = deleteConfirmResolver;
+  deleteConfirmResolver = null;
+  elements.deleteConfirmModal.hidden = true;
+  resolve(result);
+}
+
 function resetWebForm() {
   elements.webForm.reset();
   elements.webEditId.value = "";
+  renderWebCategoryOptions();
+  elements.webCategory.value = UNCATEGORIZED_ID;
+}
+
+function resetCategoryForm() {
+  elements.categoryForm.reset();
+  elements.categoryEditId.value = "";
+  elements.categoryDefaultExpanded.checked = true;
+}
+
+function getValidCategoryId(categoryId) {
+  return getAllCategories().some((category) => category.id === categoryId) ? categoryId : UNCATEGORIZED_ID;
 }
 
 function normalizeWebTarget(value) {
@@ -552,7 +931,7 @@ async function openLinkTarget(url) {
     const isFileUrl = /^file:\/\//i.test(url);
     window.alert(
       isFileUrl
-        ? "起動に失敗しました。ローカル HTML を使う場合は、この拡張の『ファイルの URL へのアクセスを許可』も確認してください。"
+        ? "起動に失敗しました。ローカル HTML を使う場合は、この拡張の設定画面で「ファイルの URL へのアクセス」を許可してください。"
         : "起動に失敗しました。URL の形式を確認してください。"
     );
   }

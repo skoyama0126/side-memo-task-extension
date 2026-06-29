@@ -62,6 +62,7 @@
 
         <section class="panel" data-panel="web">
           <div class="panel-header">
+            <button id="web-mode-toggle" class="utility-link-button" type="button">カテゴリ一覧</button>
             <button id="web-open-modal" class="memo-tool-button memo-tool-button--add" type="button">+</button>
           </div>
           <div id="web-list" class="stack-list"></div>
@@ -152,6 +153,10 @@
             <input id="web-title" type="text" maxlength="60" placeholder="例: ChatGPT" required />
           </label>
           <label>
+            <span>カテゴリ</span>
+            <select id="web-category"></select>
+          </label>
+          <label>
             <span>URL / ローカル HTML</span>
             <input id="web-url" type="text" maxlength="2000" placeholder="https://example.com または C:\path\to\index.html" required />
           </label>
@@ -159,6 +164,47 @@
             <button class="primary-button" type="submit">保存</button>
           </div>
         </form>
+      </div>
+    </div>
+
+    <div id="category-modal" class="modal" hidden>
+      <div class="modal__backdrop" data-action="close-category-modal"></div>
+      <div class="modal__dialog" role="dialog" aria-modal="true" aria-labelledby="category-modal-title">
+        <div class="modal__header">
+          <h3 id="category-modal-title">カテゴリを追加</h3>
+          <button id="category-modal-close" class="icon-letter-button" type="button" aria-label="閉じる">×</button>
+        </div>
+        <form id="category-form" class="card-form card-form--modal">
+          <input type="hidden" id="category-edit-id" />
+          <label>
+            <span>カテゴリ名</span>
+            <input id="category-name" type="text" maxlength="60" placeholder="例: 仕事" required />
+          </label>
+          <label class="checkbox-row">
+            <input id="category-default-expanded" type="checkbox" checked />
+            <span>Web一覧では初期表示で開く</span>
+          </label>
+          <div class="form-actions">
+            <button class="primary-button" type="submit">保存</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div id="delete-confirm-modal" class="modal" hidden>
+      <div class="modal__backdrop" data-action="close-delete-modal"></div>
+      <div class="modal__dialog" role="dialog" aria-modal="true" aria-labelledby="delete-confirm-title">
+        <div class="modal__header">
+          <h3 id="delete-confirm-title">削除の確認</h3>
+          <button id="delete-confirm-close" class="icon-letter-button" type="button" aria-label="閉じる">×</button>
+        </div>
+        <div class="modal__body">
+          <p id="delete-confirm-message">この項目を削除しますか？</p>
+        </div>
+        <div class="form-actions form-actions--danger">
+          <button id="delete-confirm-cancel" class="secondary-button" type="button">キャンセル</button>
+          <button id="delete-confirm-submit" class="primary-button primary-button--danger" type="button">削除</button>
+        </div>
       </div>
     </div>
 
