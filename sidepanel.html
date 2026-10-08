@@ -18,7 +18,7 @@
 
       <nav class="tabs" aria-label="メインタブ">
         <button class="tab-button is-active" data-tab="memo" type="button">メモ</button>
-        <button class="tab-button" data-tab="snippets" type="button">定型文</button>
+        <button class="tab-button" data-tab="snippets" type="button">コピペ</button>
         <button class="tab-button" data-tab="tasks" type="button">TODO</button>
         <button class="tab-button" data-tab="web" type="button">Web</button>
       </nav>
@@ -47,6 +47,7 @@
 
         <section class="panel" data-panel="snippets">
           <div class="panel-header">
+            <button id="snippet-mode-toggle" class="utility-link-button" type="button">カテゴリ一覧</button>
             <button id="snippet-open-modal" class="memo-tool-button memo-tool-button--add" type="button">+</button>
           </div>
           <div id="snippet-list" class="stack-list"></div>
@@ -71,18 +72,14 @@
     </div>
 
     <template id="snippet-item-template">
-      <article class="item-card">
-        <div class="item-card__header">
-          <button class="snippet-title-button" data-action="copy" type="button"></button>
-          <div class="item-card__inline-actions">
-            <button class="icon-letter-button" data-action="edit" type="button" aria-label="編集">編</button>
-            <button class="icon-letter-button" data-action="move-up" type="button" aria-label="上へ移動">↑</button>
-            <button class="icon-letter-button" data-action="move-down" type="button" aria-label="下へ移動">↓</button>
-            <button class="icon-letter-button icon-letter-button--danger" data-action="delete" type="button" aria-label="削除">×</button>
-          </div>
-        </div>
-        <div class="item-card__body">
-          <p></p>
+      <article class="snippet-row">
+        <button class="snippet-row__title" data-action="copy" type="button"></button>
+        <span class="snippet-row__body"></span>
+        <div class="snippet-row__actions">
+          <button class="icon-letter-button" data-action="edit" type="button" aria-label="編集">編</button>
+          <button class="icon-letter-button" data-action="move-up" type="button" aria-label="上へ移動">↑</button>
+          <button class="icon-letter-button" data-action="move-down" type="button" aria-label="下へ移動">↓</button>
+          <button class="icon-letter-button icon-letter-button--danger" data-action="delete" type="button" aria-label="削除">×</button>
         </div>
       </article>
     </template>
@@ -99,18 +96,14 @@
     </template>
 
     <template id="link-item-template">
-      <article class="item-card">
-        <div class="item-card__header">
-          <button class="snippet-title-button" data-action="open" type="button"></button>
-          <div class="item-card__inline-actions">
-            <button class="icon-letter-button" data-action="edit" type="button" aria-label="編集">編</button>
-            <button class="icon-letter-button" data-action="move-up" type="button" aria-label="上へ移動">↑</button>
-            <button class="icon-letter-button" data-action="move-down" type="button" aria-label="下へ移動">↓</button>
-            <button class="icon-letter-button icon-letter-button--danger" data-action="delete" type="button" aria-label="削除">×</button>
-          </div>
-        </div>
-        <div class="item-card__body">
-          <p></p>
+      <article class="web-link-row">
+        <button class="web-link-row__title" data-action="open" type="button"></button>
+        <span class="web-link-row__url"></span>
+        <div class="web-link-row__actions">
+          <button class="icon-letter-button" data-action="edit" type="button" aria-label="編集">編</button>
+          <button class="icon-letter-button" data-action="move-up" type="button" aria-label="上へ移動">↑</button>
+          <button class="icon-letter-button" data-action="move-down" type="button" aria-label="下へ移動">↓</button>
+          <button class="icon-letter-button icon-letter-button--danger" data-action="delete" type="button" aria-label="削除">×</button>
         </div>
       </article>
     </template>
@@ -119,7 +112,7 @@
       <div class="modal__backdrop" data-action="close-modal"></div>
       <div class="modal__dialog" role="dialog" aria-modal="true" aria-labelledby="snippet-modal-title">
         <div class="modal__header">
-          <h3 id="snippet-modal-title">定型文を追加</h3>
+          <h3 id="snippet-modal-title">コピペを追加</h3>
           <button id="snippet-modal-close" class="icon-letter-button" type="button" aria-label="閉じる">×</button>
         </div>
         <form id="snippet-form" class="card-form card-form--modal">
@@ -129,8 +122,12 @@
             <input id="snippet-title" type="text" maxlength="60" placeholder="例: LP制作プロンプト" required />
           </label>
           <label>
+            <span>カテゴリ</span>
+            <select id="snippet-category"></select>
+          </label>
+          <label>
             <span>本文</span>
-            <textarea id="snippet-body" rows="6" maxlength="2000" placeholder="コピーしたい定型文を入力" required></textarea>
+            <textarea id="snippet-body" rows="6" maxlength="2000" placeholder="コピーしたい文章を入力" required></textarea>
           </label>
           <div class="form-actions">
             <button class="primary-button" type="submit">保存</button>
@@ -180,9 +177,9 @@
             <span>カテゴリ名</span>
             <input id="category-name" type="text" maxlength="60" placeholder="例: 仕事" required />
           </label>
-          <label class="checkbox-row">
+          <label id="category-default-expanded-row" class="checkbox-row">
             <input id="category-default-expanded" type="checkbox" checked />
-            <span>Web一覧では初期表示で開く</span>
+            <span id="category-default-expanded-label">Web一覧では初期表示で開く</span>
           </label>
           <div class="form-actions">
             <button class="primary-button" type="submit">保存</button>

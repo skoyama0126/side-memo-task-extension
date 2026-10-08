@@ -1,12 +1,14 @@
 const STORAGE_KEY = "sideMemoDeskState";
 const MAX_MEMO_SLOTS = 30;
-const BACKUP_VERSION = 2;
+const BACKUP_VERSION = 3;
 const UNCATEGORIZED_ID = "uncategorized";
 
 const defaultState = {
   memos: [{ id: createId(), content: "" }],
   selectedMemoId: null,
   snippets: [],
+  snippetCategories: [],
+  snippetCategoryVisibility: {},
   tasks: [],
   webLinks: [],
   webCategories: [],
@@ -16,7 +18,9 @@ const defaultState = {
 const state = {
   data: structuredClone(defaultState),
   memoSaveTimer: null,
-  webMode: "links"
+  webMode: "links",
+  snippetMode: "snippets",
+  categoryScope: "web"
 };
 
 const elements = {
@@ -35,6 +39,8 @@ const elements = {
   snippetForm: document.querySelector("#snippet-form"),
   snippetEditId: document.querySelector("#snippet-edit-id"),
   snippetTitle: document.querySelector("#snippet-title"),
+  snippetCategory: document.querySelector("#snippet-category"),
+  snippetModeToggle: document.querySelector("#snippet-mode-toggle"),
   snippetBody: document.querySelector("#snippet-body"),
   snippetList: document.querySelector("#snippet-list"),
   snippetTemplate: document.querySelector("#snippet-item-template"),
@@ -54,6 +60,7 @@ const elements = {
   categoryForm: document.querySelector("#category-form"),
   categoryEditId: document.querySelector("#category-edit-id"),
   categoryName: document.querySelector("#category-name"),
+  categoryDefaultExpandedRow: document.querySelector("#category-default-expanded-row"),
   categoryDefaultExpanded: document.querySelector("#category-default-expanded"),
   deleteConfirmModal: document.querySelector("#delete-confirm-modal"),
   deleteConfirmClose: document.querySelector("#delete-confirm-close"),
@@ -88,7 +95,17 @@ function bindEvents() {
   elements.backupImport.addEventListener("click", () => elements.backupFileInput.click());
   elements.backupFileInput.addEventListener("change", handleBackupImport);
 
-  elements.snippetOpenModal.addEventListener("click", () => openSnippetModal());
+  elements.snippetModeToggle.addEventListener("click", () => {
+    state.snippetMode = state.snippetMode === "snippets" ? "categories" : "snippets";
+    renderSnippets();
+  });
+  elements.snippetOpenModal.addEventListener("click", () => {
+    if (state.snippetMode === "categories") {
+      openCategoryModal("カテゴリを追加", "snippet");
+      return;
+    }
+    openSnippetModal();
+  });
   elements.snippetModalClose.addEventListener("click", closeSnippetModal);
   elements.snippetModal.addEventListener("click", (event) => {
     if (event.target.dataset.action === "close-modal") {
@@ -170,6 +187,23 @@ function normalizeState(savedState) {
   if (!Array.isArray(normalized.snippets)) {
     normalized.snippets = [];
   }
+  normalized.snippetCategories = normalizeCategoryList(normalized.snippetCategories).map((category) => ({
+    ...category,
+    defaultExpanded: false
+  }));
+  const snippetCategoryIds = new Set(normalized.snippetCategories.map((category) => category.id));
+  normalized.snippets = normalized.snippets
+    .filter((item) => item && typeof item.title === "string" && typeof item.body === "string")
+    .map((item) => ({
+      ...item,
+      id: item.id || createId(),
+      categoryId: snippetCategoryIds.has(item.categoryId) ? item.categoryId : UNCATEGORIZED_ID
+    }));
+  normalized.snippetCategoryVisibility = normalizeCategoryVisibility(
+    normalized.snippetCategoryVisibility,
+    normalized.snippetCategories,
+    false
+  );
 
   if (!Array.isArray(normalized.tasks)) {
     normalized.tasks = [];
@@ -183,11 +217,15 @@ function normalizeState(savedState) {
       createdAt: task.createdAt || Date.now()
     }));
 
-  normalized.webCategories = normalizeCategoryList(normalized.webCategories);
+  normalized.webCategories = normalizeCategoryList(normalized.webCategories).map((category) => ({
+    ...category,
+    defaultExpanded: false
+  }));
   normalized.webLinks = normalizeLinkList(normalized.webLinks, normalized.webCategories);
   normalized.webCategoryVisibility = normalizeCategoryVisibility(
     normalized.webCategoryVisibility,
-    normalized.webCategories
+    normalized.webCategories,
+    false
   );
 
   return normalized;
@@ -227,22 +265,22 @@ function normalizeLinkList(list, categories = state.data.webCategories) {
     }));
 }
 
-function normalizeCategoryVisibility(visibility, categories = []) {
+function normalizeCategoryVisibility(visibility, categories = [], uncategorizedExpanded = true) {
   const nextVisibility = {};
 
   [UNCATEGORIZED_ID, ...categories.map((category) => category.id)].forEach((categoryId) => {
     const category = categories.find((item) => item.id === categoryId);
-    const defaultExpanded = category ? category.defaultExpanded !== false : true;
+    const defaultExpanded = category ? category.defaultExpanded !== false : uncategorizedExpanded;
     nextVisibility[categoryId] = defaultExpanded;
   });
 
   return nextVisibility;
 }
 
-function getAllCategories() {
+function getAllCategories(scope = "web") {
   return [
     { id: UNCATEGORIZED_ID, name: "未分類", fixed: true },
-    ...state.data.webCategories
+    ...state.data[`${scope}Categories`]
   ];
 }
 
@@ -250,8 +288,9 @@ function getCategoryName(categoryId) {
   return getAllCategories().find((category) => category.id === categoryId)?.name || "未分類";
 }
 
-function getLinksForCategory(categoryId) {
-  return state.data.webLinks.filter((item) => (item.categoryId || UNCATEGORIZED_ID) === categoryId);
+function getLinksForCategory(categoryId, scope = "web") {
+  const items = state.data[scope === "snippet" ? "snippets" : "webLinks"];
+  return items.filter((item) => (item.categoryId || UNCATEGORIZED_ID) === categoryId);
 }
 
 function isCategoryExpanded(categoryId) {
@@ -264,6 +303,7 @@ async function persistState() {
 
 function renderAll() {
   renderMemoSlots();
+  renderWebCategoryOptions("snippet");
   renderSnippets();
   renderTasks();
   renderWebCategoryOptions();
@@ -356,6 +396,7 @@ async function handleSnippetSubmit(event) {
   event.preventDefault();
   const title = elements.snippetTitle.value.trim();
   const body = elements.snippetBody.value.trim();
+  const categoryId = getValidCategoryId(elements.snippetCategory.value, "snippet");
 
   if (!title || !body) {
     return;
@@ -364,13 +405,14 @@ async function handleSnippetSubmit(event) {
   const editId = elements.snippetEditId.value;
   if (editId) {
     state.data.snippets = state.data.snippets.map((snippet) =>
-      snippet.id === editId ? { ...snippet, title, body } : snippet
+      snippet.id === editId ? { ...snippet, title, body, categoryId } : snippet
     );
   } else {
     state.data.snippets.unshift({
       id: createId(),
       title,
       body,
+      categoryId,
       createdAt: Date.now()
     });
   }
@@ -386,63 +428,90 @@ function resetSnippetForm() {
 }
 
 function renderSnippets() {
+  elements.snippetModeToggle.textContent = state.snippetMode === "snippets" ? "カテゴリ一覧" : "コピペ一覧へ戻る";
+  elements.snippetOpenModal.setAttribute("aria-label", state.snippetMode === "snippets" ? "コピペを追加" : "カテゴリを追加");
+  if (state.snippetMode === "categories") {
+    renderWebCategories("snippet");
+    return;
+  }
   elements.snippetList.innerHTML = "";
 
   if (state.data.snippets.length === 0) {
-    elements.snippetList.append(createEmptyState("まだ定型文がありません。"));
+    elements.snippetList.append(createEmptyState("まだコピペがありません。"));
     return;
   }
 
-  state.data.snippets.forEach((snippet, index) => {
-    const fragment = elements.snippetTemplate.content.cloneNode(true);
-    const card = fragment.querySelector(".item-card");
-    const titleButton = fragment.querySelector(".snippet-title-button");
-    const body = fragment.querySelector("p");
-    const editButton = fragment.querySelector('[data-action="edit"]');
-    const moveUpButton = fragment.querySelector('[data-action="move-up"]');
-    const moveDownButton = fragment.querySelector('[data-action="move-down"]');
-    const deleteButton = fragment.querySelector('[data-action="delete"]');
+  const categories = getAllCategories("snippet")
+    .filter((category) => getLinksForCategory(category.id, "snippet").length > 0)
+    .sort((left, right) => (left.id === UNCATEGORIZED_ID ? 1 : right.id === UNCATEGORIZED_ID ? -1 : 0));
+  categories.forEach((category) => {
+    const items = getLinksForCategory(category.id, "snippet");
+    const isExpanded = state.data.snippetCategoryVisibility[category.id] !== false;
+    elements.snippetList.append(createGroupHeader(category, items.length, isExpanded, "snippet"));
+    if (!isExpanded) return;
+    items.forEach((snippet, index) => {
+      const fragment = elements.snippetTemplate.content.cloneNode(true);
+      const row = fragment.querySelector(".snippet-row");
+      const titleButton = fragment.querySelector(".snippet-row__title");
+      const body = fragment.querySelector(".snippet-row__body");
+      const editButton = fragment.querySelector('[data-action="edit"]');
+      const moveUpButton = fragment.querySelector('[data-action="move-up"]');
+      const moveDownButton = fragment.querySelector('[data-action="move-down"]');
+      const deleteButton = fragment.querySelector('[data-action="delete"]');
 
-    titleButton.textContent = snippet.title;
-    body.textContent = snippet.body;
-    moveUpButton.disabled = index === 0;
-    moveDownButton.disabled = index === state.data.snippets.length - 1;
+      titleButton.textContent = snippet.title;
+      titleButton.title = snippet.title;
+      body.textContent = snippet.body;
+      body.title = snippet.body;
+      moveUpButton.disabled = index === 0;
+      moveDownButton.disabled = index === items.length - 1;
 
-    titleButton.addEventListener("click", async () => {
-      await navigator.clipboard.writeText(snippet.body);
+      titleButton.addEventListener("click", async () => {
+        await navigator.clipboard.writeText(snippet.body);
+      });
+
+      editButton.addEventListener("click", () => {
+        elements.snippetEditId.value = snippet.id;
+        elements.snippetTitle.value = snippet.title;
+        elements.snippetBody.value = snippet.body;
+        renderWebCategoryOptions("snippet");
+        elements.snippetCategory.value = getValidCategoryId(snippet.categoryId, "snippet");
+        switchTab("snippets");
+        openSnippetModal("コピペを編集");
+      });
+
+      moveUpButton.addEventListener("click", async () => {
+        await moveSnippetWithinCategory(items, index, index - 1);
+        renderSnippets();
+      });
+
+      moveDownButton.addEventListener("click", async () => {
+        await moveSnippetWithinCategory(items, index, index + 1);
+        renderSnippets();
+      });
+
+      deleteButton.addEventListener("click", async () => {
+        const shouldDelete = await confirmDelete(`「${snippet.title}」を削除しますか？`);
+        if (!shouldDelete) {
+          return;
+        }
+
+        state.data.snippets = state.data.snippets.filter((item) => item.id !== snippet.id);
+        await persistState();
+        renderSnippets();
+      });
+
+      elements.snippetList.append(row);
     });
-
-    editButton.addEventListener("click", () => {
-      elements.snippetEditId.value = snippet.id;
-      elements.snippetTitle.value = snippet.title;
-      elements.snippetBody.value = snippet.body;
-      switchTab("snippets");
-      openSnippetModal("定型文を編集");
-    });
-
-    moveUpButton.addEventListener("click", async () => {
-      await moveListItem("snippets", index, index - 1);
-      renderSnippets();
-    });
-
-    moveDownButton.addEventListener("click", async () => {
-      await moveListItem("snippets", index, index + 1);
-      renderSnippets();
-    });
-
-    deleteButton.addEventListener("click", async () => {
-      const shouldDelete = await confirmDelete(`「${snippet.title}」を削除しますか？`);
-      if (!shouldDelete) {
-        return;
-      }
-
-      state.data.snippets = state.data.snippets.filter((item) => item.id !== snippet.id);
-      await persistState();
-      renderSnippets();
-    });
-
-    elements.snippetList.append(card);
   });
+}
+
+async function moveSnippetWithinCategory(items, fromIndex, toIndex) {
+  if (toIndex < 0 || toIndex >= items.length) return;
+  const from = state.data.snippets.findIndex((item) => item.id === items[fromIndex].id);
+  const to = state.data.snippets.findIndex((item) => item.id === items[toIndex].id);
+  [state.data.snippets[from], state.data.snippets[to]] = [state.data.snippets[to], state.data.snippets[from]];
+  await persistState();
 }
 
 async function handleTaskSubmit(event) {
@@ -540,48 +609,54 @@ async function handleWebSubmit(event) {
 
 async function handleCategorySubmit(event) {
   event.preventDefault();
+  const scope = state.categoryScope;
   const name = elements.categoryName.value.trim();
-  const defaultExpanded = elements.categoryDefaultExpanded.checked;
+  const defaultExpanded = false;
   if (!name) {
     return;
   }
 
   const editId = elements.categoryEditId.value;
   if (editId) {
-    state.data.webCategories = state.data.webCategories.map((category) =>
+    state.data[`${scope}Categories`] = state.data[`${scope}Categories`].map((category) =>
       category.id === editId ? { ...category, name, defaultExpanded } : category
     );
-    state.data.webCategoryVisibility[editId] = defaultExpanded;
+    state.data[`${scope}CategoryVisibility`][editId] = defaultExpanded;
   } else {
     const id = createId();
-    state.data.webCategories.push({
+    state.data[`${scope}Categories`].push({
       id,
       name,
       defaultExpanded,
       createdAt: Date.now()
     });
-    state.data.webCategoryVisibility[id] = defaultExpanded;
+    state.data[`${scope}CategoryVisibility`][id] = defaultExpanded;
   }
 
-  state.data.webLinks = normalizeLinkList(state.data.webLinks, state.data.webCategories);
   await persistState();
   closeCategoryModal();
-  renderWebCategoryOptions();
-  renderWebPanel();
+  renderWebCategoryOptions(scope);
+  renderCategoryPanel(scope);
 }
 
-function renderWebCategoryOptions() {
-  const selectedValue = getValidCategoryId(elements.webCategory.value);
-  elements.webCategory.innerHTML = "";
+function renderWebCategoryOptions(scope = "web") {
+  const select = elements[`${scope}Category`];
+  const selectedValue = getValidCategoryId(select.value, scope);
+  select.innerHTML = "";
 
-  getAllCategories().forEach((category) => {
+  getAllCategories(scope).forEach((category) => {
     const option = document.createElement("option");
     option.value = category.id;
     option.textContent = category.name;
-    elements.webCategory.append(option);
+    select.append(option);
   });
 
-  elements.webCategory.value = selectedValue;
+  select.value = selectedValue;
+}
+
+function renderCategoryPanel(scope) {
+  if (scope === "snippet") renderSnippets();
+  else renderWebPanel();
 }
 
 function renderWebPanel() {
@@ -628,16 +703,18 @@ function renderWebLinks() {
     items.forEach((item) => {
       const absoluteIndex = state.data.webLinks.findIndex((entry) => entry.id === item.id);
       const fragment = elements.linkTemplate.content.cloneNode(true);
-      const card = fragment.querySelector(".item-card");
-      const titleButton = fragment.querySelector(".snippet-title-button");
-      const body = fragment.querySelector("p");
+      const row = fragment.querySelector(".web-link-row");
+      const titleButton = fragment.querySelector(".web-link-row__title");
+      const urlText = fragment.querySelector(".web-link-row__url");
       const editButton = fragment.querySelector('[data-action="edit"]');
       const moveUpButton = fragment.querySelector('[data-action="move-up"]');
       const moveDownButton = fragment.querySelector('[data-action="move-down"]');
       const deleteButton = fragment.querySelector('[data-action="delete"]');
 
       titleButton.textContent = item.title;
-      body.textContent = item.url;
+      titleButton.title = item.title;
+      urlText.textContent = item.url;
+      urlText.title = item.url;
       moveUpButton.disabled = absoluteIndex === 0;
       moveDownButton.disabled = absoluteIndex === state.data.webLinks.length - 1;
 
@@ -676,19 +753,20 @@ function renderWebLinks() {
         renderWebPanel();
       });
 
-      elements.webList.append(card);
+      elements.webList.append(row);
     });
   });
 }
 
-function renderWebCategories() {
-  elements.webList.innerHTML = "";
+function renderWebCategories(scope = "web") {
+  const list = elements[`${scope}List`];
+  list.innerHTML = "";
 
-  if (state.data.webCategories.length === 0) {
-    elements.webList.append(createEmptyState("まだカテゴリがありません。"));
+  if (state.data[`${scope}Categories`].length === 0) {
+    list.append(createEmptyState("まだカテゴリがありません。"));
   } else {
-    state.data.webCategories.forEach((category, index) => {
-      elements.webList.append(createCategoryRow(category, index, state.data.webCategories.length, false));
+    state.data[`${scope}Categories`].forEach((category, index) => {
+      list.append(createCategoryRow(category, index, state.data[`${scope}Categories`].length, false, scope));
     });
   }
 
@@ -696,12 +774,13 @@ function renderWebCategories() {
     { id: UNCATEGORIZED_ID, name: "未分類", fixed: true },
     0,
     1,
-    true
+    true,
+    scope
   );
-  elements.webList.append(uncategorizedRow);
+  list.append(uncategorizedRow);
 }
 
-function createCategoryRow(category, index, total, isFixed) {
+function createCategoryRow(category, index, total, isFixed, scope = "web") {
   const article = document.createElement("article");
   article.className = "task-row category-row";
 
@@ -716,8 +795,8 @@ function createCategoryRow(category, index, total, isFixed) {
   const sub = document.createElement("span");
   sub.className = "category-row__meta";
   sub.textContent = isFixed
-    ? `${getLinksForCategory(category.id).length}件 / 固定`
-    : `${getLinksForCategory(category.id).length}件 / 初期: ${category.defaultExpanded === false ? "閉" : "開"}`;
+    ? `${getLinksForCategory(category.id, scope).length}件 / 固定`
+    : `${getLinksForCategory(category.id, scope).length}件 / 初期: ${category.defaultExpanded === false ? "閉" : "開"}`;
   labelWrap.append(sub);
 
   const actions = document.createElement("div");
@@ -728,37 +807,37 @@ function createCategoryRow(category, index, total, isFixed) {
       elements.categoryEditId.value = category.id;
       elements.categoryName.value = category.name;
       elements.categoryDefaultExpanded.checked = category.defaultExpanded !== false;
-      openCategoryModal("カテゴリを編集");
+      openCategoryModal("カテゴリを編集", scope);
     });
 
     const moveUpButton = createIconButton("↑", "上へ移動", async () => {
-      await moveListItem("webCategories", index, index - 1);
-      renderWebCategoryOptions();
-      renderWebPanel();
+      await moveListItem(`${scope}Categories`, index, index - 1);
+      renderWebCategoryOptions(scope);
+      renderCategoryPanel(scope);
     });
     moveUpButton.disabled = index === 0;
 
     const moveDownButton = createIconButton("↓", "下へ移動", async () => {
-      await moveListItem("webCategories", index, index + 1);
-      renderWebCategoryOptions();
-      renderWebPanel();
+      await moveListItem(`${scope}Categories`, index, index + 1);
+      renderWebCategoryOptions(scope);
+      renderCategoryPanel(scope);
     });
     moveDownButton.disabled = index === total - 1;
 
     const deleteButton = createIconButton("×", "削除", async () => {
-      const shouldDelete = await confirmDelete(`「${category.name}」を削除しますか？\n紐づくWebは未分類へ移動します。`);
+      const shouldDelete = await confirmDelete(`「${category.name}」を削除しますか？\n紐づく${scope === "snippet" ? "コピペ" : "Web"}は未分類へ移動します。`);
       if (!shouldDelete) {
         return;
       }
 
-      state.data.webCategories = state.data.webCategories.filter((item) => item.id !== category.id);
-      state.data.webLinks = state.data.webLinks.map((item) =>
+      state.data[`${scope}Categories`] = state.data[`${scope}Categories`].filter((item) => item.id !== category.id);
+      state.data[scope === "snippet" ? "snippets" : "webLinks"] = state.data[scope === "snippet" ? "snippets" : "webLinks"].map((item) =>
         item.categoryId === category.id ? { ...item, categoryId: UNCATEGORIZED_ID } : item
       );
-      delete state.data.webCategoryVisibility[category.id];
+      delete state.data[`${scope}CategoryVisibility`][category.id];
       await persistState();
-      renderWebCategoryOptions();
-      renderWebPanel();
+      renderWebCategoryOptions(scope);
+      renderCategoryPanel(scope);
     }, true);
 
     actions.append(editButton, moveUpButton, moveDownButton, deleteButton);
@@ -778,7 +857,7 @@ function createIconButton(label, ariaLabel, onClick, isDanger = false) {
   return button;
 }
 
-function createGroupHeader(category, count, isExpanded) {
+function createGroupHeader(category, count, isExpanded, scope = "web") {
   const button = document.createElement("button");
   button.type = "button";
   button.className = "group-header";
@@ -799,9 +878,9 @@ function createGroupHeader(category, count, isExpanded) {
   titleWrap.append(toggle, titleSpan);
   button.append(titleWrap);
   button.addEventListener("click", async () => {
-    state.data.webCategoryVisibility[category.id] = !isExpanded;
+    state.data[`${scope}CategoryVisibility`][category.id] = !isExpanded;
     await persistState();
-    renderWebPanel();
+    renderCategoryPanel(scope);
   });
 
   return button;
@@ -825,7 +904,11 @@ async function moveListItem(key, fromIndex, toIndex) {
   await persistState();
 }
 
-function openSnippetModal(title = "定型文を追加") {
+function openSnippetModal(title = "コピペを追加") {
+  renderWebCategoryOptions("snippet");
+  if (!elements.snippetEditId.value) {
+    elements.snippetCategory.value = UNCATEGORIZED_ID;
+  }
   document.querySelector("#snippet-modal-title").textContent = title;
   elements.snippetModal.hidden = false;
   elements.snippetTitle.focus();
@@ -851,7 +934,11 @@ function closeWebModal() {
   resetWebForm();
 }
 
-function openCategoryModal(title = "カテゴリを追加") {
+function openCategoryModal(title = "カテゴリを追加", scope = "web") {
+  state.categoryScope = scope;
+  elements.categoryDefaultExpandedRow.hidden = true;
+  document.querySelector("#category-default-expanded-label").textContent =
+    `${scope === "snippet" ? "コピペ" : "Web"}一覧では初期表示で開く`;
   document.querySelector("#category-modal-title").textContent = title;
   elements.categoryModal.hidden = false;
   elements.categoryName.focus();
@@ -899,8 +986,8 @@ function resetCategoryForm() {
   elements.categoryDefaultExpanded.checked = true;
 }
 
-function getValidCategoryId(categoryId) {
-  return getAllCategories().some((category) => category.id === categoryId) ? categoryId : UNCATEGORIZED_ID;
+function getValidCategoryId(categoryId, scope = "web") {
+  return getAllCategories(scope).some((category) => category.id === categoryId) ? categoryId : UNCATEGORIZED_ID;
 }
 
 function normalizeWebTarget(value) {
